@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Logs and coverage
+*.log
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local databases and dumps
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+
+# Node (Sprint 4+)
+node_modules/
+.next/
+dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.cursor-cache/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local data / scratch
+data/local/
+tmp/
