@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://api.prod.legislation.gov.au/v1/versions",
+    "parameters": {
+      "$filter": "titleId eq 'C2004A00109' and isLatest eq true"
+    }
+  },
+  "retrieved_at_utc": "2026-07-20T16:50:13.0492025+00:00",
+  "http_status": 200,
+  "content_type": "application/json; odata.metadata=minimal; odata.streaming=true; charset=utf-8",
+  "etag": null,
+  "last_modified": null,
+  "content_length": null,
+  "content_digest": null,
+  "repr_digest": null,
+  "sha256": "49edc5f473f5a6adaf62c0dab2e655ad6df6b827bd4f54e516a8a60d9db89592",
+  "title_id": "C2004A00109",
+  "register_id": "C2026C00206",
+  "compilation_number": "164"
+}
