@@ -20,6 +20,14 @@ from legal_ai.provenance import (
 from legal_ai.provenance.content_store import _is_path_within_root
 
 
+class _SimulatedWindowsPermissionError(PermissionError):
+    winerror: int
+
+    def __init__(self, winerror: int, message: str) -> None:
+        super().__init__(errno.EACCES, message)
+        self.winerror = winerror
+
+
 def _temporary_files(root: Path) -> list[Path]:
     return list(root.rglob(".artifact-*.tmp"))
 
@@ -177,9 +185,10 @@ def test_transient_windows_publication_error_is_retried(
         nonlocal publication_attempts
         publication_attempts += 1
         if publication_attempts < 3:
-            error = PermissionError(errno.EACCES, "simulated Windows sharing violation")
-            error.winerror = 32
-            raise error
+            raise _SimulatedWindowsPermissionError(
+                32,
+                "simulated Windows sharing violation",
+            )
         original_link(source, destination)
 
     monkeypatch.setattr(os, "link", transient_then_publish)
@@ -200,9 +209,10 @@ def test_non_allowlisted_windows_permission_error_is_not_retried(
     def deny_publication(_source: Path, _destination: Path) -> None:
         nonlocal publication_attempts
         publication_attempts += 1
-        error = PermissionError(errno.EACCES, "simulated non-transient permission error")
-        error.winerror = 87
-        raise error
+        raise _SimulatedWindowsPermissionError(
+            87,
+            "simulated non-transient permission error",
+        )
 
     monkeypatch.setattr(os, "link", deny_publication)
 
@@ -320,9 +330,10 @@ def test_cleanup_permission_error_after_verified_publication_is_bounded(
         nonlocal cleanup_attempts
         if path.name.startswith(".artifact-"):
             cleanup_attempts += 1
-            error = PermissionError(errno.EACCES, "simulated Windows sharing violation")
-            error.winerror = 32
-            raise error
+            raise _SimulatedWindowsPermissionError(
+                32,
+                "simulated Windows sharing violation",
+            )
         original_unlink(path, missing_ok=missing_ok)
 
     monkeypatch.setattr(Path, "unlink", deny_temporary_cleanup)
