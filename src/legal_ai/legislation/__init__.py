@@ -8,6 +8,18 @@ from .models import (
     StructuredLegislationBlock,
     StructuredLegislationDocument,
 )
+from .paragraph_models import (
+    LegislationParagraphDiagnostic,
+    LegislationParagraphDiagnosticCode,
+    ParagraphRole,
+    ParagraphStructuredLegislationBlock,
+    ParagraphStructuredLegislationDocument,
+)
+from .paragraphs import (
+    LegislationParagraphError,
+    LegislationParagraphValidationError,
+    structure_legislation_paragraphs,
+)
 from .structure import structure_legislation
 from .subsection_models import (
     LegislationSubstructureDiagnostic,
@@ -23,6 +35,10 @@ from .subsections import (
 )
 
 __all__ = [
+    "LegislationParagraphDiagnostic",
+    "LegislationParagraphDiagnosticCode",
+    "LegislationParagraphError",
+    "LegislationParagraphValidationError",
     "LegislationStructureDiagnostic",
     "LegislationStructureDiagnosticCode",
     "LegislationStructureError",
@@ -31,6 +47,9 @@ __all__ = [
     "LegislationSubstructureDiagnosticCode",
     "LegislationSubstructureError",
     "LegislationSubstructureValidationError",
+    "ParagraphRole",
+    "ParagraphStructuredLegislationBlock",
+    "ParagraphStructuredLegislationDocument",
     "StructuralRole",
     "StructuredLegislationBlock",
     "StructuredLegislationDocument",
@@ -38,5 +57,6 @@ __all__ = [
     "SubstructuredLegislationDocument",
     "SubstructureRole",
     "structure_legislation",
+    "structure_legislation_paragraphs",
     "structure_legislation_subsections",
 ]
