@@ -128,9 +128,37 @@ Federal Register API: official, free, no key, OpenAPI-described — but may chan
 
 **Build now:** repo foundation; Federal Register adapter; WA adapter; immutable versioned source capture (raw + parsed + metadata + SHA-256); structured legislative parsing; lexical retrieval baseline; eval-gated vector comparison; evidence packets; provider-neutral answer service; deterministic citation validation; refusal paths; minimal local UI; eval report; demo.
 
-**Not now:** matter management; user accounts; external customers; contract review; document uploads; email/calendar; external dispatch; approval service; OPA/Cedar; Temporal/LangGraph; multi-agent orchestration; production hosting; real client information; court document preparation.
+**Not now:** matter management; user accounts; external customers; contract review; document uploads; email/calendar; external dispatch; approval service; OPA/Cedar; Temporal/LangGraph; multi-agent orchestration; production hosting; real client information; court document preparation. (Casework Phase 1 foundation is gated by ADR 0009 and §11A below; it does not reopen the remainder of this “Not now” list.)
 
 Any addition to "build now" requires an ADR first.
+
+## 11A. Casework OS expansion (gated)
+
+ADR 0009 accepts evolving this repository into a governed Australian Legal
+Casework OS while preserving the grounded legislation research substrate.
+
+After owner acceptance of ADR 0009 and this section:
+
+- Casework **Phase 1 foundation** (generic matter core) is **in scope to plan**;
+  product-code changes still require a separate bounded Phase 1 plan before
+  implementation begins;
+- Casework workstreams follow `docs/execution/CASEWORK_OS_ROADMAP.md` only;
+  that roadmap does not replace or weaken the grounded-research sprint plan in
+  §12 of this file;
+- Shared FRL, provenance, parsing, legislation, retrieval, evidence-packet, and
+  citation-validation capabilities remain required platform substrate and must
+  not be deleted or weakened;
+- Unsupported cases remain `RESEARCH_AND_DRAFT_ONLY`;
+- First operational playbook remains `wa_motor_property_damage_v1`;
+- L3+ capabilities still require a dedicated ADR and controls each;
+- L5/L6 remain never autonomously executable;
+- No live external actions, production deployment, real client data, OAuth
+  credentials, email sending, insurance or police submissions, settlement,
+  admission, signature, or court filing are authorised by ADR 0009 or this
+  section alone.
+
+The §3–§10 product definition, §9 evaluation gates, and §12 grounded-research
+sprint plan remain in force for shared platform research work.
 
 ---
 
