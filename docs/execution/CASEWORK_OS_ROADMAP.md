@@ -1,16 +1,21 @@
-# Casework OS — Proposed Execution Roadmap
+# Casework OS — Execution Roadmap
 
-**Status:** Proposed (does not replace `MVP_ROADMAP.md`)
+**Status:** Active for Casework workstreams only (does not replace `MVP_ROADMAP.md`)
 **Date:** 2026-07-28
-**Governing ADR:** [0009 — Casework OS product pivot](../adr/0009-casework-os-product-pivot.md)
+**Governing ADR:** [0009 — Casework OS product pivot](../adr/0009-casework-os-product-pivot.md) (Accepted 2026-07-28)
 **Audit evidence:** [CASEWORK_OS_AUDIT.md](CASEWORK_OS_AUDIT.md)
 
 ## Precedence
 
-Until the repository owner explicitly amends `docs/execution/MVP_ROADMAP.md`,
-that file remains the official execution profile under repository precedence.
-This document is the proposed Casework OS delivery sequence for review alongside
-ADR 0009.
+Authority order remains: `CLAUDE.md` → `docs/execution/MVP_ROADMAP.md` (including
+§11A) → `AGENTS.md` → task instructions. `LEGAL_AI_MASTER_BLUEPRINT.md` is the
+north-star architecture and does not override that order.
+
+This document applies **only to Casework workstreams**. The grounded-research
+sprint plan in `MVP_ROADMAP.md` §12 remains the binding profile for shared
+platform research work. ADR 0009 and §11A place Casework Phase 1 foundation
+**in scope to plan**; Phase 1 product code still requires a separate bounded
+phase plan. Phases 2–12 remain not started and separately gated.
 
 Shared research substrate work (Federal Register, WA sources, provenance,
 parsing, retrieval, evidence packets) continues as reusable platform capability
@@ -58,21 +63,27 @@ L3+ capabilities require a dedicated ADR and controls (see ADR 0009 §D).
 
 ### Phase 0 — Repository audit and product-pivot decision
 
-**Scope:** documentation only.
-**Deliverables:** audit, this roadmap, ADR 0009, implementation ledger, ADR index.
+**Status:** Completed (documentation/governance finalisation).
+**Scope:** documentation and owner-authorised §11A amendment only.
+**Deliverables:** audit, this roadmap, ADR 0009 (Accepted), implementation
+ledger, ADR index, `MVP_ROADMAP.md` §11A.
 **Acceptance criteria:**
 - ADR 0009 distinguishes long-term direction, Phase 0 docs, Phase 1 gate, L3+ gate.
-- No `src/`, `tests/`, `alembic/`, or protected governance file changes.
+- No `src/`, `tests/`, or `alembic/` product-code changes.
 - Lint/format/type/unit checks remain green.
 
-**Safety gates:** no product code; no credentials; no Phase 1 start.
+**Safety gates:** no product code; no credentials; no Phase 1 implementation start.
 
 ### Phase 1 — Generic matter core
 
+**Status:** Approved to plan; Not Started. Requires a separate bounded Phase 1
+plan before any product-code changes.
 **Scope:** typed matter, party, fact, issue, risk, case-type models; PostgreSQL
 schema and migrations; deterministic state machine; matter-isolated
 repositories; audit-event foundation; unit and integration tests.
-**Out of scope:** model, email, UI, external network.
+**Out of scope:** model, email, UI, external network; live external actions;
+production deployment; real client data; OAuth; email sending; insurance or
+police submissions; settlement; admission; signature; court filing; L3+.
 **Acceptance criteria:**
 - Matter-scoped repository APIs require matter identity.
 - Invalid state transitions rejected and logged.
@@ -233,9 +244,8 @@ rollback; restricted-access plan.
 
 ## Follow-on owner actions (not agent-executable alone)
 
-1. Accept or reject ADR 0009 via PR review.
-2. Authorise exact amendments to `MVP_ROADMAP.md` (and any CLAUDE.md MVP-note
-   clarification) before Phase 1 code.
-3. Approve provider accounts, OAuth, credentials, and any private-alpha deploy.
-4. Approve any use of real personal information (default remains synthetic/public).
-5. Approve a dedicated ADR before every L3+ capability.
+1. Approve a separate bounded Phase 1 plan before any Phase 1 product code.
+2. Approve provider accounts, OAuth, credentials, and any private-alpha deploy.
+3. Approve any use of real personal information (default remains synthetic/public).
+4. Approve a dedicated ADR before every L3+ capability.
+5. Merge this branch via normal review when ready (push/PR only when authorised).

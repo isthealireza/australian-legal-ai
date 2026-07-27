@@ -6,13 +6,17 @@
 **Branch for this deliverable:** `docs/phase-0-casework-os-audit`
 **Related decision:** [ADR 0009](../adr/0009-casework-os-product-pivot.md)
 
-This document distinguishes what exists today from what is only planned. It does
-not authorise Phase 1 code. Product implementation remains blocked until ADR
-0009 is Accepted on `main` and an owner-approved amendment to
-`docs/execution/MVP_ROADMAP.md` lands.
+This document distinguishes what exists today from what is only planned.
+ADR 0009 is Accepted (2026-07-28) and `MVP_ROADMAP.md` §11A is in force.
+Phase 1 foundation is **approved to plan only**. Product-code changes remain
+blocked until a separate bounded Phase 1 plan is approved. This audit does not
+authorise live external actions, production deployment, real client data,
+OAuth, email sending, insurance or police submissions, settlement, admission,
+signature, court filing, L3+ execution, or L5/L6 autonomy.
 
 Repository facts were re-verified against `origin/main` before writing. ADR
-number 0009 was confirmed unused on `origin/main` (latest accepted ADR: 0008).
+number 0009 was confirmed unused on `origin/main` at Phase 0 start (latest
+accepted ADR then: 0008).
 
 ---
 
@@ -105,16 +109,16 @@ Do not delete, replace, rename, or weaken them.
 
 ## 4. Conflict analysis with governance and MVP scope
 
-| Authority | Conflict / alignment |
+| Authority | Status after Phase 0 finalisation |
 |---|---|
-| `MVP_ROADMAP.md` §11 Scope Freeze | **Conflict.** “Not now” lists matter management, document uploads, email/calendar, external dispatch, approval service, Temporal — all Casework OS targets. Any addition requires an ADR first; Phase 1 also needs an owner-approved roadmap amendment. |
-| `MVP_ROADMAP.md` §3–5 | **Conflict.** Product defined as grounded Q&A research assistant, not case intake / playbook workflows. |
-| `CLAUDE.md` §3 MVP note | **Conflict for later phases.** Only L0–L2 in MVP; L3+ needs dedicated ADR. Approved email send (Phases 7–8) is L3/L4. |
-| `AGENTS.md` | **Constraint.** Protected files and existing ADRs must not be silently changed. New ADR 0009 is the authorised decision record for this pivot. |
+| `MVP_ROADMAP.md` §11 / §11A | **Resolved for Phase 1 planning.** §11 “Not now” retained; §11A gates Casework Phase 1 foundation as in scope to plan only. Remainder of “Not now” (email, dispatch, Temporal, production, real client data, etc.) stays frozen. |
+| `MVP_ROADMAP.md` §3–5 / §12 | **Dual-track.** Grounded Q&A research remains shared platform work; Casework workstreams follow `CASEWORK_OS_ROADMAP.md` only. |
+| `CLAUDE.md` §3 MVP note | **Preserved.** Only L0–L2 without dedicated ADR; L3+ still needs dedicated ADR. ADR 0009 does not authorise L3+. |
+| `AGENTS.md` | **Preserved.** Protected files changed only under this owner authorisation (§11A + ADR acceptance). |
 | `LEGAL_AI_MASTER_BLUEPRINT.md` | **Aligned.** Matters, playbooks, approvals, L0–L6, fail-closed retrieval. |
-| Grounding / fail-closed / no real client data | **Aligned.** Casework OS must preserve these; unsupported cases stay research-and-draft-only. |
+| Grounding / fail-closed / no real client data | **Aligned.** Unsupported cases stay `RESEARCH_AND_DRAFT_ONLY`. |
 
-**Smallest compliant path:** accept ADR 0009 → owner amends `MVP_ROADMAP.md` →
+**Compliant path now:** ADR 0009 Accepted + §11A in force → separate Phase 1 plan →
 implement modular `casework/` and `playbooks/` beside existing modules.
 
 ---
@@ -147,29 +151,27 @@ implement modular `casework/` and `playbooks/` beside existing modules.
 
 | Document | Issue |
 |---|---|
-| `README.md` | Still describes Sprint 0 / package-metadata-only state; application modules exist |
-| `docs/execution/MVP_ROADMAP.md` | Still sole execution profile; Casework roadmap is proposed separately and does not replace it yet |
-| `docs/adr/README.md` | Updated in Phase 0 to index ADR 0009 |
-| No `IMPLEMENTATION_STATUS.md` before Phase 0 | Created in this phase |
-
-Do not rewrite protected governance files in Phase 0.
+| `README.md` | Still describes Sprint 0 / package-metadata-only state; application modules exist (intentionally unchanged in Phase 0) |
+| `docs/execution/MVP_ROADMAP.md` | Now includes §11A Casework gate; grounded-research §12 remains in force for shared platform work |
+| `docs/adr/README.md` | Indexes ADR 0009 as Accepted |
+| `docs/execution/IMPLEMENTATION_STATUS.md` | Phase ledger for Casework phases |
 
 ---
 
 ## 7. Protected files requiring owner approval before modification
 
-Exact owner approval is required before changing:
+Exact owner approval remains required before changing:
 
 1. `CLAUDE.md`
 2. `AGENTS.md`
 3. `LEGAL_AI_MASTER_BLUEPRINT.md`
-4. `docs/execution/MVP_ROADMAP.md`
+4. `docs/execution/MVP_ROADMAP.md` (beyond the owner-authorised §11 / §11A edits in this finalisation)
 5. Existing ADRs `0001`–`0008` (content)
 6. Git tags (including `governance-v1.0.0`)
 
-Phase 0 proposes ADR 0009 and companion execution docs only. Follow-on
-roadmap supersession wording for `MVP_ROADMAP.md` is **proposed in the Phase 0
-completion report, not applied to the file**.
+Phase 0 finalisation applies the owner-authorised §11A amendment and marks ADR
+0009 Accepted. Further protected-file edits still require explicit owner
+approval.
 
 ---
 
