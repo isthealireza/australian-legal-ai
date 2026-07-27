@@ -58,9 +58,7 @@ def migrated_engine(test_database_url: str) -> Iterator[Engine]:
     engine = create_engine(test_database_url)
     with engine.begin() as connection:
         # Immutable audit triggers block DELETE; disable only for disposable test cleanup.
-        connection.execute(
-            text("ALTER TABLE casework_audit_events DISABLE TRIGGER USER")
-        )
+        connection.execute(text("ALTER TABLE casework_audit_events DISABLE TRIGGER USER"))
         connection.execute(delete(casework_audit_events))
         connection.execute(delete(casework_tasks))
         connection.execute(delete(casework_deadlines))

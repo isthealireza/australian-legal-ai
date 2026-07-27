@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -130,7 +130,7 @@ class FakeCaseworkRepository:
             updated_by=str(values.get("updated_by", matter.updated_by)),
             created_at=matter.created_at,
             updated_at=datetime.now(UTC),
-            closed_at=values.get("closed_at", matter.closed_at),  # type: ignore[arg-type]
+            closed_at=cast("datetime | None", values.get("closed_at", matter.closed_at)),
         )
         self.matters[matter_id] = updated
         return updated

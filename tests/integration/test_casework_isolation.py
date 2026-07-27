@@ -13,6 +13,7 @@ from legal_ai.casework.models import (
     AddPartyCommand,
     AssignRoleCommand,
     CreateMatterCommand,
+    MatterRecord,
 )
 from legal_ai.casework.repository import CaseworkRepository
 from legal_ai.casework.service import CaseworkService
@@ -34,7 +35,7 @@ def _service(engine: Engine) -> CaseworkService:
     return CaseworkService(CaseworkRepository(engine))
 
 
-def _create_matter(service: CaseworkService, *, title: str) -> object:
+def _create_matter(service: CaseworkService, *, title: str) -> MatterRecord:
     return service.create_matter(
         CreateMatterCommand(
             title=title,

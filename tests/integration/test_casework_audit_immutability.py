@@ -34,9 +34,7 @@ def test_direct_sql_audit_update_rejected(migrated_engine: Engine) -> None:
     )
     with migrated_engine.connect() as connection:
         event_id = connection.execute(
-            text(
-                "SELECT event_id FROM casework_audit_events WHERE matter_id = :matter_id LIMIT 1"
-            ),
+            text("SELECT event_id FROM casework_audit_events WHERE matter_id = :matter_id LIMIT 1"),
             {"matter_id": matter.matter_id},
         ).scalar_one()
         connection.commit()
@@ -45,8 +43,7 @@ def test_direct_sql_audit_update_rejected(migrated_engine: Engine) -> None:
         with migrated_engine.begin() as connection:
             connection.execute(
                 text(
-                    "UPDATE casework_audit_events SET reason = 'tamper' "
-                    "WHERE event_id = :event_id"
+                    "UPDATE casework_audit_events SET reason = 'tamper' WHERE event_id = :event_id"
                 ),
                 {"event_id": event_id},
             )
@@ -69,9 +66,7 @@ def test_direct_sql_audit_delete_rejected(migrated_engine: Engine) -> None:
     )
     with migrated_engine.connect() as connection:
         event_id = connection.execute(
-            text(
-                "SELECT event_id FROM casework_audit_events WHERE matter_id = :matter_id LIMIT 1"
-            ),
+            text("SELECT event_id FROM casework_audit_events WHERE matter_id = :matter_id LIMIT 1"),
             {"matter_id": matter.matter_id},
         ).scalar_one()
         connection.commit()
