@@ -7,7 +7,7 @@
 | Phase | Status |
 |---|---|
 | Phase 0 — Repository audit and product-pivot decision | **Completed** (merged to `main` @ `9cd74bad53f774dabaf976cbd47325335bf133d9`, PR #8) |
-| Phase 1 — Generic matter core | **In Progress** |
+| Phase 1 — Generic matter core | **Implementation Complete; Merge Pending** |
 | Phase 2 — Playbook registry and WA motor playbook | Not Started |
 | Phase 3 — Evidence vault extension | Not Started |
 | Phase 4 — Research and evidence packets | Not Started |
@@ -24,7 +24,7 @@
 
 - ADR 0009: **Accepted** (2026-07-28)
 - `MVP_ROADMAP.md` §11A: Casework Phase 1 foundation authorised after approved plan
-- Phase 1 final corrected plan: **owner-approved for implementation**
+- Phase 1 final corrected plan: implemented on `feat/phase-1-casework-core`
 - Phase 1 boundaries: Generic Casework Core only (L0–L2); no playbooks, LLM, email,
   evidence binaries, FastAPI/UI, pgvector, L3+, or real client data
 - Phase 2: **Not Started**
@@ -33,31 +33,28 @@
 
 - **Branch:** `feat/phase-1-casework-core`
 - **Starting main SHA:** `9cd74bad53f774dabaf976cbd47325335bf133d9`
-- **Active slice:** domain types, state machine, and authority policy
+- **Status rule:** do not mark Phase 1 **Completed** until the implementation PR is
+  merged; then update the ledger on `main` via a docs-only follow-up with PR number
+  and merge SHA
+
+## Local validation evidence (implementation branch)
+
+```text
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked mypy .
+uv run --locked pytest -q --ignore=tests/integration
+LEGAL_AI_TEST_DATABASE_URL=... uv run --locked pytest -q tests/integration
+```
+
+Integration suite executed against disposable `postgres:16-alpine` on localhost.
 
 ## Blockers and approval gates
 
-1. Push/PR/merge not authorised by the Phase 1 implementation approval alone until
-   owner requests publication.
-2. Phase 1 must not be marked **Completed** until the implementation PR is merged;
-   end-of-branch status is **Implementation Complete; Merge Pending**.
+1. Push/PR/merge require separate owner publication authorisation.
+2. Phase 1 **Completed** only after merge + docs follow-up on `main`.
 3. Every L3+ capability blocked until a dedicated ADR and controls exist.
-4. No autonomous admission, settlement, signature, court filing, police
-   submission, insurance submission, or external communication.
-
-## Authority precedence
-
-```text
-CLAUDE.md
-  → docs/execution/MVP_ROADMAP.md (incl. §11A)
-  → AGENTS.md
-  → LEGAL_AI_MASTER_BLUEPRINT.md (north star; does not override CLAUDE/MVP)
-  → ADR 0009
-  → docs/execution/CASEWORK_OS_ROADMAP.md (Casework workstreams only)
-  → approved Phase 1 plan
-```
 
 ## Exact next action
 
-Continue Phase 1 slices on `feat/phase-1-casework-core` within the approved file
-and capability boundary. Do not start Phase 2.
+Owner review and publication of `feat/phase-1-casework-core`. Do not start Phase 2.
