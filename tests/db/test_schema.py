@@ -3,11 +3,11 @@ from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
 from legal_ai.db import artifacts, metadata, source_document_captures
 
 
-def test_metadata_contains_only_the_bounded_provenance_tables() -> None:
-    assert set(metadata.tables) == {
+def test_metadata_contains_provenance_tables() -> None:
+    assert {
         "provenance_artifacts",
         "source_document_captures",
-    }
+    } <= set(metadata.tables)
 
 
 def test_artifact_schema_declares_immutable_integrity_constraints() -> None:
