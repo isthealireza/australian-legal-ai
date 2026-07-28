@@ -109,8 +109,8 @@ class FakePlaybookRepository:
             row_version=kwargs["expected_row_version"] + 1,
             created_by=existing.created_by,
             created_at=existing.created_at,
-            updated_by=kwargs["activated_by"],
-            updated_at=kwargs["activated_at"],
+            updated_by=existing.updated_by,
+            updated_at=existing.updated_at,
             activated_by=kwargs["activated_by"],
             activated_at=kwargs["activated_at"],
             effective_from=kwargs["effective_from"],
@@ -295,12 +295,16 @@ def test_activate_synthetic_with_permit_gate() -> None:
         ActivateVersionCommand(
             playbook_version_id=version.playbook_version_id,
             row_version=version.row_version,
-            actor="tester",
+            actor="activator",
         )
     )
     assert activated.status is PlaybookStatus.ACTIVE
+    assert activated.updated_by == "tester"
+    assert activated.updated_at == version.updated_at
+    assert activated.activated_by == "activator"
     assert any(
-        event.event_type is PlaybookAuditEventType.PLAYBOOK_ACTIVATED for event in repo.audit
+        event.event_type is PlaybookAuditEventType.PLAYBOOK_ACTIVATED and event.actor == "activator"
+        for event in repo.audit
     )
 
 

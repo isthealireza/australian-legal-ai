@@ -67,9 +67,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    database_url = os.environ.get("DATABASE_URL") or os.environ.get("LEGAL_AI_DATABASE_URL")
+    database_url = os.environ.get("LEGAL_AI_DATABASE_URL")
     if not database_url:
-        print("error: DATABASE_URL (or LEGAL_AI_DATABASE_URL) is required", file=sys.stderr)
+        print("error: LEGAL_AI_DATABASE_URL is required", file=sys.stderr)
         return 2
 
     if args.command == "seed-wa-motor-v1":

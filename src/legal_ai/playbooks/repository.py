@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import Connection, Engine, RowMapping, delete, select, update
+from sqlalchemy import Connection, Engine, RowMapping, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
@@ -136,6 +136,7 @@ class PlaybookRepository:
                 definition_json=dict(definition_json),
                 content_sha256=content_sha256,
                 updated_by=actor,
+                updated_at=func.now(),
                 row_version=expected_row_version + 1,
             )
         )
@@ -234,7 +235,6 @@ class PlaybookRepository:
                 activated_by=activated_by,
                 activated_at=activated_at,
                 effective_from=effective_from if effective_from is not None else activated_at,
-                updated_by=activated_by,
                 row_version=expected_row_version + 1,
             )
         )
@@ -266,7 +266,6 @@ class PlaybookRepository:
                 retired_by=retired_by,
                 retired_at=retired_at,
                 retirement_reason_code=retirement_reason_code,
-                updated_by=retired_by,
                 row_version=expected_row_version + 1,
             )
         )
