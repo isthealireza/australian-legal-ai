@@ -10,6 +10,20 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legal_ai_ci
+          POSTGRES_PASSWORD: legal_ai_ci_test_only
+          POSTGRES_DB: legal_ai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legal_ai_ci -d legal_ai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -38,5 +52,10 @@ jobs:
       - name: Type-check
         run: uv run --locked mypy .
 
-      - name: Test
-        run: uv run --locked pytest
+      - name: Test (unit)
+        run: uv run --locked pytest -q --ignore=tests/integration
+
+      - name: Test (PostgreSQL integration)
+        env:
+          LEGAL_AI_TEST_DATABASE_URL: postgresql+psycopg://legal_ai_ci:legal_ai_ci_test_only@localhost:5432/legal_ai_test
+        run: uv run --locked pytest -q tests/integration
