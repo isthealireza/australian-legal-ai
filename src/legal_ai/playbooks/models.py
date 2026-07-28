@@ -187,10 +187,10 @@ def validate_definition_payload(data: dict[str, Any]) -> PlaybookDefinitionPaylo
     except Exception as exc:  # noqa: BLE001 — normalize to domain error
         raise PlaybookValidationError(str(exc)) from exc
     validate_rule_tree(payload.eligibility_rule())
-    for item in payload.disqualifiers:
-        validate_rule_tree(parse_rule_node(item.rule))
-    for item in payload.escalation_rules:
-        validate_rule_tree(parse_rule_node(item.rule))
+    for disqualifier in payload.disqualifiers:
+        validate_rule_tree(parse_rule_node(disqualifier.rule))
+    for escalation in payload.escalation_rules:
+        validate_rule_tree(parse_rule_node(escalation.rule))
     return payload
 
 

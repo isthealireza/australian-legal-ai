@@ -11,7 +11,7 @@ from .conftest import alembic_config
 
 pytestmark = pytest.mark.integration
 
-_REVISION = "0005_casework_core"
+_REVISION = "0006_playbook_framework"
 _CASEWORK_TABLES = {
     "casework_matters",
     "casework_parties",
@@ -21,6 +21,15 @@ _CASEWORK_TABLES = {
     "casework_deadlines",
     "casework_tasks",
     "casework_audit_events",
+    "playbooks",
+    "playbook_versions",
+    "playbook_audit_events",
+    "casework_playbook_evaluations",
+    "casework_playbook_evaluation_candidates",
+    "casework_intake_answers",
+    "casework_intake_answers_history",
+    "casework_checklist_states",
+    "casework_checklist_states_history",
 }
 _PROVENANCE_TABLES = {
     "provenance_artifacts",

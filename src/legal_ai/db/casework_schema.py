@@ -30,7 +30,9 @@ _MATTER_STATUSES = (
     "'INTAKE_INCOMPLETE', 'INTAKE_COMPLETE', 'RESEARCH_AND_DRAFT_ONLY', "
     "'ACTIVE', 'WAITING', 'HUMAN_REVIEW_REQUIRED', 'RESOLVED', 'CLOSED'"
 )
-_CASE_TYPES = "'UNASSIGNED', 'UNSUPPORTED', 'SUPPORTED_PENDING_PLAYBOOK'"
+_CASE_TYPES = (
+    "'UNASSIGNED', 'UNSUPPORTED', 'SUPPORTED_PENDING_PLAYBOOK', 'MOTOR_VEHICLE_PROPERTY_DAMAGE'"
+)
 _RISK_LEVELS = "'R0', 'R1', 'R2', 'R3', 'R4'"
 _AUTHORITIES = "'L0', 'L1', 'L2'"
 _PARTY_ENTITY_TYPES = "'NATURAL_PERSON', 'ORGANISATION'"
@@ -79,8 +81,22 @@ casework_matters = Table(
         server_default=func.now(),
     ),
     Column("closed_at", DateTime(timezone=True), nullable=True),
+    Column("assigned_playbook_version_id", UUID(as_uuid=True), nullable=True),
+    Column("playbook_assigned_at", DateTime(timezone=True), nullable=True),
+    Column("playbook_assigned_by", String(128), nullable=True),
     PrimaryKeyConstraint("matter_id", name="pk_casework_matters"),
     UniqueConstraint("reference", name="uq_casework_matters_reference"),
+    UniqueConstraint(
+        "matter_id",
+        "assigned_playbook_version_id",
+        name="uq_casework_matters_matter_pin",
+    ),
+    ForeignKeyConstraint(
+        ["assigned_playbook_version_id"],
+        ["playbook_versions.playbook_version_id"],
+        name="fk_casework_matters_assigned_playbook_version_id",
+        ondelete="RESTRICT",
+    ),
     CheckConstraint(
         f"status IN ({_MATTER_STATUSES})",
         name="ck_casework_matters_status",
