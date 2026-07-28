@@ -8,7 +8,7 @@
 |---|---|
 | Phase 0 — Repository audit and product-pivot decision | **Completed** (merged to `main` @ `9cd74bad53f774dabaf976cbd47325335bf133d9`, PR #8) |
 | Phase 1 — Generic matter core | **Completed** (merged to `main` @ `8766468e00be2dc79b7eda08baec713d5356654d`, PR #9) |
-| Phase 2 — Playbook registry and WA motor playbook | Not Started |
+| Phase 2 — Playbook registry and WA motor playbook | **In Progress** |
 | Phase 3 — Evidence vault extension | Not Started |
 | Phase 4 — Research and evidence packets | Not Started |
 | Phase 5 — Drafting with mock model | Not Started |
@@ -23,39 +23,35 @@
 ## Current approved scope
 
 - ADR 0009: **Accepted** (2026-07-28)
-- `MVP_ROADMAP.md` §11A: Casework Phase 1 foundation authorised after approved plan
 - Phase 1 Generic Casework Core: **Completed** on `main`
-- Phase 1 boundaries respected: L0–L2 only; no playbooks, LLM, email, OAuth,
-  external actions, FastAPI/UI, pgvector, production deployment, real client data,
-  or L3+ execution
-- Phase 2: **Not Started**
+- Phase 2 Versioned Playbook Framework: **In Progress** (owner-approved final plan)
+- Phase 2 boundaries: L0–L2 only; no product playbook activation; no LLM, email,
+  OAuth, external actions, FastAPI/UI, pgvector, production deployment, real
+  client data, or L3+ execution
+- Phase 3: **Not Started**
 
-## Phase 1 completion evidence
+## Branch and baseline
 
-- **Implementation PR:** [#9](https://github.com/isthealireza/australian-legal-ai/pull/9)
-- **PR URL:** https://github.com/isthealireza/australian-legal-ai/pull/9
-- **Merge commit:** `8766468e00be2dc79b7eda08baec713d5356654d`
-- **Merged at:** 2026-07-28T04:02:20Z
-- **Successful CI run:** [30325948037](https://github.com/isthealireza/australian-legal-ai/actions/runs/30325948037) — conclusion **success**
-- **CI URL:** https://github.com/isthealireza/australian-legal-ai/actions/runs/30325948037
-- **Unit tests (implementation / PR #9):** 556 passed, 1 skipped
-- **PostgreSQL integration (implementation / PR #9):** 40 passed
-- **Ruff, formatting, Mypy, Gitleaks:** passed on PR #9 CI
-- **Alembic source head:** `0005_casework_core`
+- **Branch:** `feat/phase-2-playbook-framework`
+- **Starting main SHA:** `5498cfd6e246e03defc4bfbf2b0b709780c0b3d4`
+- **Status rule:** do not mark Phase 2 **Completed** until the implementation PR
+  is merged; then update the ledger on `main` via a docs-only follow-up
 
-### Capabilities completed
+## Grounding security boundary
 
-- Generic Casework Core (matters, parties, facts, issues, tasks, deadlines, audit)
-- Matter isolation implemented and tested (direct and indirect cross-matter attacks)
-- Audit immutability enforced in application transactions and by PostgreSQL triggers
-- Optimistic concurrency, state machine, and L0–L2 authority gates
+Grounding is application-enforced via `FailClosedGroundingGate` on every
+activation path. PostgreSQL enforces lifecycle and payload immutability but
+does not validate legal grounding. Privileged direct database access is outside
+the application policy boundary.
 
 ## Blockers and approval gates
 
-1. Phase 2 planning and implementation require separate owner authorisation.
-2. Every L3+ capability blocked until a dedicated ADR and controls exist.
+1. Push/PR/merge require separate owner publication authorisation.
+2. Phase 2 **Completed** only after merge + docs follow-up on `main`.
+3. No product playbook may become ACTIVE in Phase 2.
+4. Every L3+ capability blocked until a dedicated ADR and controls exist.
 
 ## Exact next action
 
-Do not start Phase 2 until separately authorised. No deployment or non-test
-database migration is authorised by Phase 1 completion.
+Implement Versioned Playbook Framework on `feat/phase-2-playbook-framework`.
+Do not start Phase 3. Do not push or open a PR without separate authorisation.

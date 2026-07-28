@@ -100,6 +100,19 @@ AUDIT_METADATA_ALLOWLIST: frozenset[str] = frozenset(
         "timezone",
         "row_version",
         "entity_id",
+        "playbook_key",
+        "playbook_version_id",
+        "playbook_version",
+        "content_sha256",
+        "candidate_count",
+        "reason_code",
+        "from_playbook_version_id",
+        "to_playbook_version_id",
+        "outcome_code",
+        "evaluation_id",
+        "question_id",
+        "checklist_item_id",
+        "correlation_id",
     }
 )
 _AUDIT_METADATA_MAX_BYTES = 4096
