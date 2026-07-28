@@ -451,6 +451,9 @@ class MatterRecord:
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    assigned_playbook_version_id: UUID | None = None
+    playbook_assigned_at: datetime | None = None
+    playbook_assigned_by: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

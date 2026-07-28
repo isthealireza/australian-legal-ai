@@ -85,6 +85,9 @@ class FakeCaseworkRepository:
             created_at=now,
             updated_at=now,
             closed_at=None,
+            assigned_playbook_version_id=None,
+            playbook_assigned_at=None,
+            playbook_assigned_by=None,
         )
         self.matters[matter.matter_id] = matter
         return matter
@@ -122,7 +125,11 @@ class FakeCaseworkRepository:
             summary=matter.summary,
             status=MatterStatus(str(values.get("status", matter.status.value))),
             jurisdiction=matter.jurisdiction,
-            case_type=matter.case_type,
+            case_type=(
+                CaseType(str(values["case_type"]))
+                if "case_type" in values
+                else matter.case_type
+            ),
             risk_level=matter.risk_level,
             action_authority_ceiling=matter.action_authority_ceiling,
             row_version=expected_row_version + 1,
@@ -131,6 +138,18 @@ class FakeCaseworkRepository:
             created_at=matter.created_at,
             updated_at=datetime.now(UTC),
             closed_at=cast("datetime | None", values.get("closed_at", matter.closed_at)),
+            assigned_playbook_version_id=cast(
+                "UUID | None",
+                values.get("assigned_playbook_version_id", matter.assigned_playbook_version_id),
+            ),
+            playbook_assigned_at=cast(
+                "datetime | None",
+                values.get("playbook_assigned_at", matter.playbook_assigned_at),
+            ),
+            playbook_assigned_by=cast(
+                "str | None",
+                values.get("playbook_assigned_by", matter.playbook_assigned_by),
+            ),
         )
         self.matters[matter_id] = updated
         return updated
@@ -246,6 +265,9 @@ def _seed_matter(
         created_at=now,
         updated_at=now,
         closed_at=datetime.now(UTC) if status is MatterStatus.CLOSED else None,
+        assigned_playbook_version_id=None,
+        playbook_assigned_at=None,
+        playbook_assigned_by=None,
     )
     fake.matters[matter_id] = matter
     return matter

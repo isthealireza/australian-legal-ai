@@ -10,11 +10,19 @@ from legal_ai.playbooks.errors import (
     GroundingValidationFailed,
     PlaybookError,
     PlaybookValidationError,
+    SeedHashConflictError,
 )
 from legal_ai.playbooks.grounding import FailClosedGroundingGate, require_grounding_gate
 from legal_ai.playbooks.hashing import canonical_definition_bytes, content_sha256
-from legal_ai.playbooks.models import PlaybookDefinitionPayload, validate_definition_payload
+from legal_ai.playbooks.models import (
+    PlaybookDefinitionPayload,
+    PlaybookVersionRecord,
+    SeedDraftResult,
+    validate_definition_payload,
+)
+from legal_ai.playbooks.repository import PlaybookRepository
 from legal_ai.playbooks.rules import evaluate_rule, parse_rule_node
+from legal_ai.playbooks.service import PlaybookService
 from legal_ai.playbooks.types import (
     OperationalClass,
     PlaybookStatus,
@@ -38,9 +46,14 @@ __all__ = [
     "OperationalClass",
     "PlaybookDefinitionPayload",
     "PlaybookError",
+    "PlaybookRepository",
+    "PlaybookService",
     "PlaybookStatus",
     "PlaybookValidationError",
+    "PlaybookVersionRecord",
     "RuleResult",
+    "SeedDraftResult",
+    "SeedHashConflictError",
     "assert_playbook_action_allowed",
     "canonical_definition_bytes",
     "content_sha256",

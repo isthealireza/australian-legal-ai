@@ -171,6 +171,54 @@ class CaseworkRepository:
             )
         return self.require_matter(connection, matter_id)
 
+    def lock_matter(self, connection: Connection, matter_id: UUID) -> MatterRecord:
+        """Lock the matter row (SELECT FOR UPDATE) and return the current record."""
+
+        row = (
+            connection.execute(
+                select(casework_matters)
+                .where(casework_matters.c.matter_id == matter_id)
+                .with_for_update()
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            raise NotFoundError(f"matter not found: {matter_id}")
+        return self._matter_record(row)
+
+    def update_matter_pin(
+        self,
+        connection: Connection,
+        *,
+        matter_id: UUID,
+        expected_row_version: int,
+        assigned_playbook_version_id: UUID | None,
+        playbook_assigned_at: datetime | None,
+        playbook_assigned_by: str | None,
+        updated_by: str,
+        case_type: CaseType | None = None,
+        status: MatterStatus | None = None,
+    ) -> MatterRecord:
+        """Update playbook pin metadata with optimistic concurrency."""
+
+        values: dict[str, Any] = {
+            "assigned_playbook_version_id": assigned_playbook_version_id,
+            "playbook_assigned_at": playbook_assigned_at,
+            "playbook_assigned_by": playbook_assigned_by,
+            "updated_by": updated_by,
+        }
+        if case_type is not None:
+            values["case_type"] = case_type.value
+        if status is not None:
+            values["status"] = status.value
+        return self.update_matter_optimistic(
+            connection,
+            matter_id=matter_id,
+            expected_row_version=expected_row_version,
+            values=values,
+        )
+
     def insert_party(
         self,
         connection: Connection,
@@ -718,6 +766,9 @@ class CaseworkRepository:
             created_at=cast(datetime, row["created_at"]),
             updated_at=cast(datetime, row["updated_at"]),
             closed_at=cast(datetime | None, row["closed_at"]),
+            assigned_playbook_version_id=cast(UUID | None, row["assigned_playbook_version_id"]),
+            playbook_assigned_at=cast(datetime | None, row["playbook_assigned_at"]),
+            playbook_assigned_by=cast(str | None, row["playbook_assigned_by"]),
         )
 
     @staticmethod
