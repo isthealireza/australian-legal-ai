@@ -55,7 +55,10 @@ def _clear_playbook_data(engine: Engine) -> None:
         connection.execute(
             text(
                 "UPDATE casework_matters SET assigned_playbook_version_id = NULL, "
-                "playbook_assigned_at = NULL, playbook_assigned_by = NULL"
+                "playbook_assigned_at = NULL, playbook_assigned_by = NULL, "
+                "case_type = CASE "
+                "WHEN case_type = 'MOTOR_VEHICLE_PROPERTY_DAMAGE' THEN 'UNASSIGNED' "
+                "ELSE case_type END"
             )
         )
         connection.execute(text("DELETE FROM playbook_versions"))
@@ -66,6 +69,12 @@ def _clear_playbook_data(engine: Engine) -> None:
 
 def test_upgrade_to_head_is_playbook_framework(test_database_url: str) -> None:
     config = alembic_config(test_database_url)
+    command.upgrade(config, "head")
+    engine = create_engine(test_database_url)
+    try:
+        _clear_playbook_data(engine)
+    finally:
+        engine.dispose()
     command.downgrade(config, "base")
     command.upgrade(config, "head")
 

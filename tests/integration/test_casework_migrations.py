@@ -63,6 +63,44 @@ def test_casework_downgrade_preserves_provenance_sentinel(test_database_url: str
     sentinel = f"test_casework_sentinel_{uuid.uuid4().hex}"
     engine = create_engine(test_database_url)
     try:
+        # Phase 2 downgrade refuses if playbook/pin/MOTOR case_type rows remain.
+        with engine.begin() as connection:
+            for table_name in (
+                "casework_checklist_states_history",
+                "casework_intake_answers_history",
+                "casework_playbook_evaluation_candidates",
+                "casework_playbook_evaluations",
+                "playbook_audit_events",
+                "playbook_versions",
+            ):
+                connection.execute(text(f"ALTER TABLE {table_name} DISABLE TRIGGER USER"))
+            connection.execute(text("DELETE FROM casework_checklist_states"))
+            connection.execute(text("DELETE FROM casework_checklist_states_history"))
+            connection.execute(text("DELETE FROM casework_intake_answers"))
+            connection.execute(text("DELETE FROM casework_intake_answers_history"))
+            connection.execute(text("DELETE FROM casework_playbook_evaluation_candidates"))
+            connection.execute(text("DELETE FROM casework_playbook_evaluations"))
+            connection.execute(text("DELETE FROM playbook_audit_events"))
+            connection.execute(text("DELETE FROM casework_audit_events"))
+            connection.execute(text("DELETE FROM casework_tasks"))
+            connection.execute(text("DELETE FROM casework_deadlines"))
+            connection.execute(text("DELETE FROM casework_issues"))
+            connection.execute(text("DELETE FROM casework_fact_items"))
+            connection.execute(text("DELETE FROM casework_party_roles"))
+            connection.execute(text("DELETE FROM casework_parties"))
+            connection.execute(text("DELETE FROM casework_matters"))
+            connection.execute(text("DELETE FROM playbook_versions"))
+            connection.execute(text("DELETE FROM playbooks"))
+            for table_name in (
+                "casework_checklist_states_history",
+                "casework_intake_answers_history",
+                "casework_playbook_evaluation_candidates",
+                "casework_playbook_evaluations",
+                "playbook_audit_events",
+                "playbook_versions",
+                "casework_audit_events",
+            ):
+                connection.execute(text(f"ALTER TABLE {table_name} ENABLE TRIGGER USER"))
         with engine.begin() as connection:
             connection.execute(text(f'CREATE TABLE "{sentinel}" (id integer PRIMARY KEY)'))
             sha = "a" * 64

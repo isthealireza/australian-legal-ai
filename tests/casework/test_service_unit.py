@@ -126,9 +126,7 @@ class FakeCaseworkRepository:
             status=MatterStatus(str(values.get("status", matter.status.value))),
             jurisdiction=matter.jurisdiction,
             case_type=(
-                CaseType(str(values["case_type"]))
-                if "case_type" in values
-                else matter.case_type
+                CaseType(str(values["case_type"])) if "case_type" in values else matter.case_type
             ),
             risk_level=matter.risk_level,
             action_authority_ceiling=matter.action_authority_ceiling,

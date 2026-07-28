@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from tests.support.playbook_grounding import PermitSyntheticGroundingGate
 
 from legal_ai.casework.types import ActionAuthorityLevel, CaseType, Jurisdiction, MatterStatus
 from legal_ai.playbooks import production_grounding_gate
@@ -23,6 +22,7 @@ from legal_ai.playbooks.types import (
     RuleComparator,
     RuleResult,
 )
+from tests.support.playbook_grounding import PermitSyntheticGroundingGate
 
 
 def _minimal_payload(**overrides: object) -> dict[str, object]:

@@ -9,7 +9,6 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from tests.support.playbook_grounding import PermitSyntheticGroundingGate
 
 from legal_ai.casework.repository import CaseworkRepository
 from legal_ai.casework.types import ActionAuthorityLevel, CaseType, Jurisdiction, MatterStatus
@@ -28,6 +27,7 @@ from legal_ai.playbooks.types import (
     PlaybookStatus,
     RuleComparator,
 )
+from tests.support.playbook_grounding import PermitSyntheticGroundingGate
 
 
 class _FakeConnection:

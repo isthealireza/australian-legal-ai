@@ -245,6 +245,7 @@ def test_evaluation_update_and_delete_blocked(migrated_engine: Engine) -> None:
             ),
             {"mid": assigned.matter_id},
         ).scalar_one()
+    with migrated_engine.begin() as connection:
         with pytest.raises(DBAPIError, match="immutable"):
             connection.execute(
                 text(
@@ -254,18 +255,12 @@ def test_evaluation_update_and_delete_blocked(migrated_engine: Engine) -> None:
                 {"eid": evaluation_id},
             )
     with migrated_engine.begin() as connection:
-        evaluation_id = connection.execute(
-            text(
-                "SELECT evaluation_id FROM casework_playbook_evaluations "
-                "WHERE matter_id = :mid LIMIT 1"
-            ),
-            {"mid": assigned.matter_id},
-        ).scalar_one()
         with pytest.raises(DBAPIError, match="immutable"):
             connection.execute(
                 text("DELETE FROM casework_playbook_evaluations WHERE evaluation_id = :eid"),
                 {"eid": evaluation_id},
             )
+    with migrated_engine.begin() as connection:
         with pytest.raises(DBAPIError, match="immutable"):
             connection.execute(
                 text(
