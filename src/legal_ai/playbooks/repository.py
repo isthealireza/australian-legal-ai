@@ -24,6 +24,7 @@ from legal_ai.db import (
     playbook_versions,
     playbooks,
 )
+from legal_ai.db.transactions import independent_transaction
 from legal_ai.playbooks.errors import PlaybookNotFoundError, PlaybookValidationError
 from legal_ai.playbooks.models import (
     ChecklistStateRecord,
@@ -64,6 +65,13 @@ class PlaybookRepository:
 
         with self._bind.begin():
             yield self._bind
+
+    @contextmanager
+    def independent_transaction(self) -> Iterator[Connection]:
+        """Commit independently of any transaction owned by the caller."""
+
+        with independent_transaction(self._bind) as connection:
+            yield connection
 
     def ensure_playbook_family(
         self,
@@ -535,24 +543,37 @@ class PlaybookRepository:
             .one_or_none()
         )
         if existing is None:
-            connection.execute(
-                insert(casework_intake_answers).values(
-                    matter_id=matter_id,
-                    playbook_version_id=playbook_version_id,
-                    question_id=question_id,
-                    value_type=value_type.value,
-                    value_boolean=value_boolean,
-                    value_text=value_text,
-                    value_date=value_date,
-                    value_enum_code=value_enum_code,
-                    answered_by=answered_by,
-                    answered_at=answered_at,
-                    row_version=1,
+            if expected_row_version is not None:
+                raise ConcurrencyConflictError(
+                    "intake answer does not exist; expected_row_version must be None"
                 )
-            )
+            try:
+                connection.execute(
+                    insert(casework_intake_answers).values(
+                        matter_id=matter_id,
+                        playbook_version_id=playbook_version_id,
+                        question_id=question_id,
+                        value_type=value_type.value,
+                        value_boolean=value_boolean,
+                        value_text=value_text,
+                        value_date=value_date,
+                        value_enum_code=value_enum_code,
+                        answered_by=answered_by,
+                        answered_at=answered_at,
+                        row_version=1,
+                    )
+                )
+            except IntegrityError as exc:
+                raise ConcurrencyConflictError(
+                    "intake answer create conflict; row now exists or pin changed"
+                ) from exc
         else:
             current_version = cast(int, existing["row_version"])
-            if expected_row_version is not None and expected_row_version != current_version:
+            if expected_row_version is None:
+                raise ConcurrencyConflictError(
+                    "intake answer exists; expected_row_version is required for update"
+                )
+            if expected_row_version != current_version:
                 raise ConcurrencyConflictError(
                     f"intake answer row_version conflict at {expected_row_version}"
                 )
@@ -617,21 +638,34 @@ class PlaybookRepository:
             .one_or_none()
         )
         if existing is None:
-            connection.execute(
-                insert(casework_checklist_states).values(
-                    matter_id=matter_id,
-                    playbook_version_id=playbook_version_id,
-                    checklist_item_id=checklist_item_id,
-                    status=status.value,
-                    note=note,
-                    updated_by=updated_by,
-                    updated_at=updated_at,
-                    row_version=1,
+            if expected_row_version is not None:
+                raise ConcurrencyConflictError(
+                    "checklist state does not exist; expected_row_version must be None"
                 )
-            )
+            try:
+                connection.execute(
+                    insert(casework_checklist_states).values(
+                        matter_id=matter_id,
+                        playbook_version_id=playbook_version_id,
+                        checklist_item_id=checklist_item_id,
+                        status=status.value,
+                        note=note,
+                        updated_by=updated_by,
+                        updated_at=updated_at,
+                        row_version=1,
+                    )
+                )
+            except IntegrityError as exc:
+                raise ConcurrencyConflictError(
+                    "checklist state create conflict; row now exists or pin changed"
+                ) from exc
         else:
             current_version = cast(int, existing["row_version"])
-            if expected_row_version is not None and expected_row_version != current_version:
+            if expected_row_version is None:
+                raise ConcurrencyConflictError(
+                    "checklist state exists; expected_row_version is required for update"
+                )
+            if expected_row_version != current_version:
                 raise ConcurrencyConflictError(
                     f"checklist state row_version conflict at {expected_row_version}"
                 )

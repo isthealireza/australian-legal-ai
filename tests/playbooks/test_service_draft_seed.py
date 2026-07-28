@@ -45,6 +45,10 @@ class FakePlaybookRepository:
     def transaction(self) -> Iterator[_FakeConnection]:
         yield _FakeConnection()
 
+    @contextmanager
+    def independent_transaction(self) -> Iterator[_FakeConnection]:
+        yield _FakeConnection()
+
     def ensure_playbook_family(
         self, connection: _FakeConnection, *, playbook_key: str, display_name: str, created_by: str
     ) -> None:

@@ -467,26 +467,37 @@ class PlaybookService:
             return matter
 
     def apply_fallback(self, command: ApplyFallbackCommand) -> MatterRecord:
-        with self._casework.transaction() as connection:
-            matter = self._require_open_matter(connection, command.matter_id)
-            if matter.row_version != command.row_version:
-                raise ConcurrencyConflictError(
-                    f"matter {command.matter_id} row_version conflict at {command.row_version}"
-                )
-            try:
+        matter: MatterRecord | None = None
+        try:
+            with self._casework.transaction() as connection:
+                matter = self._require_open_matter(connection, command.matter_id)
+                if matter.row_version != command.row_version:
+                    raise ConcurrencyConflictError(
+                        f"matter {command.matter_id} row_version conflict at {command.row_version}"
+                    )
                 assert_transition_allowed(
                     current=matter.status,
                     target=command.target_status,
                     case_type=matter.case_type,
                     reopen=False,
                 )
-            except InvalidTransitionError as exc:
+
+                now = datetime.now(UTC)
+                updated = self._casework.update_matter_optimistic(
+                    connection,
+                    matter_id=command.matter_id,
+                    expected_row_version=command.row_version,
+                    values={
+                        "status": command.target_status.value,
+                        "updated_by": command.actor,
+                    },
+                )
                 evaluation_id = uuid4()
                 self._playbooks.insert_evaluation(
                     connection,
                     evaluation_id=evaluation_id,
                     matter_id=command.matter_id,
-                    occurred_at=datetime.now(UTC),
+                    occurred_at=now,
                     actor=command.actor,
                     outcome_code=command.outcome_code,
                     reason_code=command.reason_code,
@@ -499,62 +510,85 @@ class PlaybookService:
                         for idx, vid in enumerate(command.candidate_version_ids, start=1)
                     ],
                 )
-                raise TransitionRequiredError(
-                    f"fallback status transition not allowed: "
-                    f"{matter.status.value} -> {command.target_status.value}",
-                    evaluation_id=evaluation_id,
-                ) from exc
-
-            now = datetime.now(UTC)
-            updated = self._casework.update_matter_optimistic(
-                connection,
-                matter_id=command.matter_id,
-                expected_row_version=command.row_version,
-                values={
-                    "status": command.target_status.value,
-                    "updated_by": command.actor,
-                },
+                self._append_casework_audit(
+                    connection,
+                    event_id=uuid4(),
+                    matter_id=command.matter_id,
+                    actor=command.actor,
+                    event_type=AuditEventType.PLAYBOOK_FALLBACK_APPLIED,
+                    entity_type="matter",
+                    entity_id=command.matter_id,
+                    correlation_id=command.correlation_id,
+                    reason=None,
+                    source_channel=command.source_channel,
+                    metadata={
+                        "command_type": "ApplyFallback",
+                        "from_status": matter.status.value,
+                        "to_status": command.target_status.value,
+                        "outcome_code": command.outcome_code.value,
+                        "reason_code": command.reason_code.value,
+                        "evaluation_id": str(evaluation_id),
+                        "row_version": updated.row_version,
+                    },
+                )
+                return updated
+        except InvalidTransitionError as invalid_transition:
+            if matter is None:
+                raise
+            message = (
+                "fallback status transition not allowed: "
+                f"{matter.status.value} -> {command.target_status.value}"
             )
+            pending_error = TransitionRequiredError(message)
             evaluation_id = uuid4()
-            self._playbooks.insert_evaluation(
-                connection,
+            try:
+                with self._casework.independent_transaction() as connection:
+                    self._playbooks.insert_evaluation(
+                        connection,
+                        evaluation_id=evaluation_id,
+                        matter_id=command.matter_id,
+                        occurred_at=datetime.now(UTC),
+                        actor=command.actor,
+                        outcome_code=command.outcome_code,
+                        reason_code=command.reason_code,
+                        selected_playbook_version_id=None,
+                        matter_row_version_observed=command.row_version,
+                        notes=command.notes,
+                        correlation_id=command.correlation_id,
+                        candidates=[
+                            (vid, idx, RuleResult.MATCH)
+                            for idx, vid in enumerate(command.candidate_version_ids, start=1)
+                        ],
+                    )
+                    self._append_casework_audit(
+                        connection,
+                        event_id=uuid4(),
+                        matter_id=command.matter_id,
+                        actor=command.actor,
+                        event_type=AuditEventType.ACTION_DENIED,
+                        entity_type="matter",
+                        entity_id=command.matter_id,
+                        correlation_id=command.correlation_id,
+                        reason=None,
+                        source_channel=command.source_channel,
+                        metadata={
+                            "command_type": "ApplyFallback",
+                            "from_status": matter.status.value,
+                            "to_status": command.target_status.value,
+                            "outcome_code": command.outcome_code.value,
+                            "reason_code": command.reason_code.value,
+                            "evaluation_id": str(evaluation_id),
+                            "row_version": matter.row_version,
+                        },
+                    )
+            except Exception:
+                raise PlaybookAuditWriteFailed(
+                    "fallback rejection evaluation/audit persistence failed"
+                ) from pending_error
+            raise TransitionRequiredError(
+                message,
                 evaluation_id=evaluation_id,
-                matter_id=command.matter_id,
-                occurred_at=now,
-                actor=command.actor,
-                outcome_code=command.outcome_code,
-                reason_code=command.reason_code,
-                selected_playbook_version_id=None,
-                matter_row_version_observed=command.row_version,
-                notes=command.notes,
-                correlation_id=command.correlation_id,
-                candidates=[
-                    (vid, idx, RuleResult.MATCH)
-                    for idx, vid in enumerate(command.candidate_version_ids, start=1)
-                ],
-            )
-            self._append_casework_audit(
-                connection,
-                event_id=uuid4(),
-                matter_id=command.matter_id,
-                actor=command.actor,
-                event_type=AuditEventType.PLAYBOOK_FALLBACK_APPLIED,
-                entity_type="matter",
-                entity_id=command.matter_id,
-                correlation_id=command.correlation_id,
-                reason=None,
-                source_channel=command.source_channel,
-                metadata={
-                    "command_type": "ApplyFallback",
-                    "from_status": matter.status.value,
-                    "to_status": command.target_status.value,
-                    "outcome_code": command.outcome_code.value,
-                    "reason_code": command.reason_code.value,
-                    "evaluation_id": str(evaluation_id),
-                    "row_version": updated.row_version,
-                },
-            )
-            return updated
+            ) from invalid_transition
 
     def mark_unsupported(self, command: MarkUnsupportedCommand) -> MatterRecord:
         with self._casework.transaction() as connection:
@@ -1031,7 +1065,7 @@ class PlaybookService:
         error: Exception,
     ) -> None:
         try:
-            with self._playbooks.transaction() as connection:
+            with self._playbooks.independent_transaction() as connection:
                 self._playbooks.append_playbook_audit(
                     connection,
                     event_id=uuid4(),

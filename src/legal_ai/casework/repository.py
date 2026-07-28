@@ -60,6 +60,7 @@ from legal_ai.db import (
     casework_party_roles,
     casework_tasks,
 )
+from legal_ai.db.transactions import independent_transaction
 
 _REFERENCE_SEQUENCE = "casework_matter_reference_seq"
 
@@ -84,6 +85,13 @@ class CaseworkRepository:
 
         with self._bind.begin():
             yield self._bind
+
+    @contextmanager
+    def independent_transaction(self) -> Iterator[Connection]:
+        """Commit independently of any transaction owned by the caller."""
+
+        with independent_transaction(self._bind) as connection:
+            yield connection
 
     def allocate_reference(self, connection: Connection) -> str:
         value = connection.execute(text(f"SELECT nextval('{_REFERENCE_SEQUENCE}')")).scalar_one()

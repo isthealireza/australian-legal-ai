@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from typing import Any
 
 import pytest
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 
-from legal_ai.casework.errors import ClosedMatterMutationError
+from legal_ai.casework.errors import ClosedMatterMutationError, ConcurrencyConflictError
 from legal_ai.casework.models import (
     AddPartyCommand,
     AssignRoleCommand,
@@ -36,7 +38,11 @@ from legal_ai.playbooks.definitions.wa_motor_property_damage_v1 import (
 from legal_ai.playbooks.definitions.wa_motor_property_damage_v1 import (
     wa_motor_property_damage_v1_definition,
 )
-from legal_ai.playbooks.errors import GroundingUnavailable
+from legal_ai.playbooks.errors import (
+    GroundingUnavailable,
+    PlaybookAuditWriteFailed,
+    TransitionRequiredError,
+)
 from legal_ai.playbooks.grounding import FailClosedGroundingGate, GroundingActivationGate
 from legal_ai.playbooks.models import (
     ActivateVersionCommand,
@@ -259,6 +265,23 @@ def _close_matter(casework: CaseworkService, matter: MatterRecord) -> MatterReco
     )
 
 
+def _assigned_matter(
+    playbooks: PlaybookService,
+    casework: CaseworkService,
+) -> MatterRecord:
+    active = _create_active_synthetic(playbooks)
+    matter = _intake_complete_matter(casework)
+    return playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=active.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+
+
 def test_create_synthetic_active_playbook(migrated_engine: Engine) -> None:
     playbooks, _casework, _pr, _cr = _services(migrated_engine)
     active = _create_active_synthetic(playbooks)
@@ -383,6 +406,561 @@ def test_zero_candidates_fallback_writes_evaluation_without_unsupported(
         )
     assert row["outcome_code"] == EvaluationOutcome.NO_CANDIDATES.value
     assert row["reason_code"] == EvaluationReason.NO_ACTIVE_MATCH.value
+
+
+def test_rejected_fallback_persists_evaluation_and_audit_after_outer_rollback(
+    migrated_engine: Engine,
+) -> None:
+    engine_playbooks, casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+    candidate = _create_active_synthetic(engine_playbooks)
+    second_candidate = _create_active_synthetic(
+        engine_playbooks,
+        version=2,
+        definition=_synthetic_definition(description="Second rejected fallback candidate."),
+    )
+    matter = _intake_complete_matter(casework)
+
+    with migrated_engine.connect() as outer_connection:
+        outer_transaction = outer_connection.begin()
+        connection_service = PlaybookService(
+            PlaybookRepository(outer_connection),
+            CaseworkRepository(outer_connection),
+            PermitSyntheticGroundingGate(),
+        )
+        with pytest.raises(TransitionRequiredError) as raised:
+            connection_service.apply_fallback(
+                ApplyFallbackCommand(
+                    matter_id=matter.matter_id,
+                    row_version=matter.row_version,
+                    actor=_ACTOR,
+                    source_channel=_CHANNEL,
+                    target_status=MatterStatus.CLOSED,
+                    outcome_code=EvaluationOutcome.MULTIPLE_CANDIDATES,
+                    reason_code=EvaluationReason.MULTIPLE_ACTIVE_MATCHES,
+                    candidate_version_ids=(
+                        candidate.playbook_version_id,
+                        second_candidate.playbook_version_id,
+                    ),
+                    notes="invalid fallback transition",
+                )
+            )
+        evaluation_id = raised.value.evaluation_id
+        assert evaluation_id is not None
+        outer_transaction.rollback()
+
+    with migrated_engine.connect() as fresh_connection:
+        reloaded_matter = (
+            fresh_connection.execute(
+                text(
+                    "SELECT status, row_version, assigned_playbook_version_id "
+                    "FROM casework_matters WHERE matter_id = :mid"
+                ),
+                {"mid": matter.matter_id},
+            )
+            .mappings()
+            .one()
+        )
+        evaluation = (
+            fresh_connection.execute(
+                text(
+                    "SELECT outcome_code, reason_code, matter_row_version_observed "
+                    "FROM casework_playbook_evaluations WHERE evaluation_id = :eid"
+                ),
+                {"eid": evaluation_id},
+            )
+            .mappings()
+            .one()
+        )
+        audit = (
+            fresh_connection.execute(
+                text(
+                    "SELECT event_type, metadata FROM casework_audit_events "
+                    "WHERE matter_id = :mid "
+                    "AND metadata->>'evaluation_id' = :eid"
+                ),
+                {"mid": matter.matter_id, "eid": str(evaluation_id)},
+            )
+            .mappings()
+            .one()
+        )
+        candidate_rows = (
+            fresh_connection.execute(
+                text(
+                    "SELECT playbook_version_id, presentation_order "
+                    "FROM casework_playbook_evaluation_candidates "
+                    "WHERE evaluation_id = :eid ORDER BY presentation_order"
+                ),
+                {"eid": evaluation_id},
+            )
+            .mappings()
+            .all()
+        )
+
+    assert reloaded_matter["status"] == matter.status.value
+    assert reloaded_matter["row_version"] == matter.row_version
+    assert reloaded_matter["assigned_playbook_version_id"] is None
+    assert evaluation["outcome_code"] == EvaluationOutcome.MULTIPLE_CANDIDATES.value
+    assert evaluation["reason_code"] == EvaluationReason.MULTIPLE_ACTIVE_MATCHES.value
+    assert evaluation["matter_row_version_observed"] == matter.row_version
+    assert audit["event_type"] == "ACTION_DENIED"
+    assert audit["metadata"]["evaluation_id"] == str(evaluation_id)
+    assert [row["playbook_version_id"] for row in candidate_rows] == [
+        candidate.playbook_version_id,
+        second_candidate.playbook_version_id,
+    ]
+    assert [row["presentation_order"] for row in candidate_rows] == [1, 2]
+
+
+def test_rejected_fallback_persistence_failure_rolls_back_without_dangling_id(
+    migrated_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    candidate = _create_active_synthetic(playbooks)
+    matter = _intake_complete_matter(casework)
+
+    def fail_rejection_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise RuntimeError("synthetic independent fallback-audit failure")
+
+    monkeypatch.setattr(casework_repo, "append_audit_event", fail_rejection_audit)
+
+    with pytest.raises(PlaybookAuditWriteFailed) as raised:
+        playbooks.apply_fallback(
+            ApplyFallbackCommand(
+                matter_id=matter.matter_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                target_status=MatterStatus.CLOSED,
+                outcome_code=EvaluationOutcome.MULTIPLE_CANDIDATES,
+                reason_code=EvaluationReason.MULTIPLE_ACTIVE_MATCHES,
+                candidate_version_ids=(candidate.playbook_version_id,),
+                notes="invalid fallback transition",
+            )
+        )
+
+    transition_error = raised.value.__cause__
+    assert isinstance(transition_error, TransitionRequiredError)
+    assert transition_error.evaluation_id is None
+
+    with migrated_engine.connect() as fresh_connection:
+        reloaded_matter = (
+            fresh_connection.execute(
+                text("SELECT status, row_version FROM casework_matters WHERE matter_id = :mid"),
+                {"mid": matter.matter_id},
+            )
+            .mappings()
+            .one()
+        )
+        evaluation_count = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM casework_playbook_evaluations "
+                "WHERE matter_id = :mid AND outcome_code = :outcome"
+            ),
+            {
+                "mid": matter.matter_id,
+                "outcome": EvaluationOutcome.MULTIPLE_CANDIDATES.value,
+            },
+        ).scalar_one()
+        rejection_audit_count = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM casework_audit_events "
+                "WHERE matter_id = :mid AND event_type = 'ACTION_DENIED' "
+                "AND metadata->>'command_type' = 'ApplyFallback'"
+            ),
+            {"mid": matter.matter_id},
+        ).scalar_one()
+        candidate_count = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM casework_playbook_evaluation_candidates "
+                "WHERE playbook_version_id = :vid"
+            ),
+            {"vid": candidate.playbook_version_id},
+        ).scalar_one()
+
+    assert reloaded_matter["status"] == matter.status.value
+    assert reloaded_matter["row_version"] == matter.row_version
+    assert int(evaluation_count) == 0
+    assert int(rejection_audit_count) == 0
+    assert int(candidate_count) == 0
+
+
+def test_intake_answer_enforces_create_and_update_concurrency_contract(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+    matter = _assigned_matter(playbooks, casework)
+
+    def command(*, value: str, expected: int | None) -> UpsertIntakeAnswerCommand:
+        return UpsertIntakeAnswerCommand(
+            matter_id=matter.matter_id,
+            question_id="incident_note",
+            value_type=IntakeValueType.TEXT,
+            value_text=value,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+            expected_row_version=expected,
+        )
+
+    with pytest.raises(ConcurrencyConflictError):
+        playbooks.upsert_intake_answer(command(value="must not create", expected=1))
+
+    created = playbooks.upsert_intake_answer(command(value="created", expected=None))
+    assert created.row_version == 1
+    assert created.value_text == "created"
+
+    with pytest.raises(ConcurrencyConflictError):
+        playbooks.upsert_intake_answer(command(value="missing expectation", expected=None))
+
+    updated = playbooks.upsert_intake_answer(command(value="updated", expected=1))
+    assert updated.row_version == 2
+    assert updated.value_text == "updated"
+
+    for rejected_version in (1, 3):
+        with pytest.raises(ConcurrencyConflictError):
+            playbooks.upsert_intake_answer(
+                command(value=f"rejected {rejected_version}", expected=rejected_version)
+            )
+
+    with migrated_engine.connect() as fresh_connection:
+        stored = (
+            fresh_connection.execute(
+                text(
+                    "SELECT value_text, row_version FROM casework_intake_answers "
+                    "WHERE matter_id = :mid AND question_id = 'incident_note'"
+                ),
+                {"mid": matter.matter_id},
+            )
+            .mappings()
+            .one()
+        )
+        success_audits = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM casework_audit_events "
+                "WHERE matter_id = :mid "
+                "AND event_type = 'INTAKE_ANSWER_UPSERTED'"
+            ),
+            {"mid": matter.matter_id},
+        ).scalar_one()
+
+    assert stored["value_text"] == "updated"
+    assert stored["row_version"] == 2
+    assert int(success_audits) == 2
+
+
+def test_checklist_state_enforces_create_and_update_concurrency_contract(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+    matter = _assigned_matter(playbooks, casework)
+
+    def command(
+        *,
+        status: ChecklistItemStatus,
+        note: str,
+        expected: int | None,
+    ) -> UpsertChecklistStateCommand:
+        return UpsertChecklistStateCommand(
+            matter_id=matter.matter_id,
+            checklist_item_id="photographs",
+            status=status,
+            note=note,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+            expected_row_version=expected,
+        )
+
+    with pytest.raises(ConcurrencyConflictError):
+        playbooks.upsert_checklist_state(
+            command(
+                status=ChecklistItemStatus.MISSING,
+                note="must not create",
+                expected=1,
+            )
+        )
+
+    created = playbooks.upsert_checklist_state(
+        command(
+            status=ChecklistItemStatus.MISSING,
+            note="created",
+            expected=None,
+        )
+    )
+    assert created.row_version == 1
+    assert created.note == "created"
+
+    with pytest.raises(ConcurrencyConflictError):
+        playbooks.upsert_checklist_state(
+            command(
+                status=ChecklistItemStatus.PROVIDED,
+                note="missing expectation",
+                expected=None,
+            )
+        )
+
+    updated = playbooks.upsert_checklist_state(
+        command(
+            status=ChecklistItemStatus.PROVIDED,
+            note="updated",
+            expected=1,
+        )
+    )
+    assert updated.row_version == 2
+    assert updated.note == "updated"
+
+    for rejected_version in (1, 3):
+        with pytest.raises(ConcurrencyConflictError):
+            playbooks.upsert_checklist_state(
+                command(
+                    status=ChecklistItemStatus.UNKNOWN,
+                    note=f"rejected {rejected_version}",
+                    expected=rejected_version,
+                )
+            )
+
+    with migrated_engine.connect() as fresh_connection:
+        stored = (
+            fresh_connection.execute(
+                text(
+                    "SELECT status, note, row_version FROM casework_checklist_states "
+                    "WHERE matter_id = :mid AND checklist_item_id = 'photographs'"
+                ),
+                {"mid": matter.matter_id},
+            )
+            .mappings()
+            .one()
+        )
+        success_audits = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM casework_audit_events "
+                "WHERE matter_id = :mid "
+                "AND event_type = 'CHECKLIST_STATE_UPSERTED'"
+            ),
+            {"mid": matter.matter_id},
+        ).scalar_one()
+
+    assert stored["status"] == ChecklistItemStatus.PROVIDED.value
+    assert stored["note"] == "updated"
+    assert stored["row_version"] == 2
+    assert int(success_audits) == 2
+
+
+@pytest.mark.parametrize("record_kind", ["intake", "checklist"])
+def test_concurrent_create_has_one_winner_and_never_overwrites(
+    migrated_engine: Engine,
+    record_kind: str,
+) -> None:
+    setup_playbooks, casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+    matter = _assigned_matter(setup_playbooks, casework)
+    start = Barrier(2)
+
+    def attempt(index: int) -> str:
+        playbooks, _casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+        start.wait()
+        try:
+            if record_kind == "intake":
+                playbooks.upsert_intake_answer(
+                    UpsertIntakeAnswerCommand(
+                        matter_id=matter.matter_id,
+                        question_id="incident_note",
+                        value_type=IntakeValueType.TEXT,
+                        value_text=f"racer {index}",
+                        actor=f"racer_{index}",
+                        source_channel=_CHANNEL,
+                        expected_row_version=None,
+                    )
+                )
+            else:
+                playbooks.upsert_checklist_state(
+                    UpsertChecklistStateCommand(
+                        matter_id=matter.matter_id,
+                        checklist_item_id="photographs",
+                        status=ChecklistItemStatus.PROVIDED,
+                        note=f"racer {index}",
+                        actor=f"racer_{index}",
+                        source_channel=_CHANNEL,
+                        expected_row_version=None,
+                    )
+                )
+        except ConcurrencyConflictError:
+            return "conflict"
+        return "created"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(attempt, (1, 2)))
+
+    assert sorted(results) == ["conflict", "created"]
+    table = "casework_intake_answers" if record_kind == "intake" else "casework_checklist_states"
+    event_type = "INTAKE_ANSWER_UPSERTED" if record_kind == "intake" else "CHECKLIST_STATE_UPSERTED"
+    with migrated_engine.connect() as fresh_connection:
+        row = (
+            fresh_connection.execute(
+                text(
+                    f"SELECT row_version FROM {table} "  # noqa: S608 - test-only fixed table allowlist
+                    "WHERE matter_id = :mid"
+                ),
+                {"mid": matter.matter_id},
+            )
+            .mappings()
+            .one()
+        )
+        success_audits = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM casework_audit_events "
+                "WHERE matter_id = :mid AND event_type = :event_type"
+            ),
+            {"mid": matter.matter_id, "event_type": event_type},
+        ).scalar_one()
+
+    assert row["row_version"] == 1
+    assert int(success_audits) == 1
+
+
+@pytest.mark.parametrize("record_kind", ["intake", "checklist"])
+def test_other_matter_and_pin_row_versions_cannot_bypass_concurrency(
+    migrated_engine: Engine,
+    record_kind: str,
+) -> None:
+    playbooks, casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+    v1 = _create_active_synthetic(playbooks, version=1)
+    v2 = _create_active_synthetic(
+        playbooks,
+        version=2,
+        definition=_synthetic_definition(description="Other pin concurrency fixture."),
+    )
+    matter_a_unassigned = _intake_complete_matter(casework)
+    matter_b_unassigned = _intake_complete_matter(casework)
+    matter_a = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter_a_unassigned.matter_id,
+            playbook_version_id=v1.playbook_version_id,
+            row_version=matter_a_unassigned.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+    matter_b = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter_b_unassigned.matter_id,
+            playbook_version_id=v2.playbook_version_id,
+            row_version=matter_b_unassigned.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+
+    if record_kind == "intake":
+        created_a = playbooks.upsert_intake_answer(
+            UpsertIntakeAnswerCommand(
+                matter_id=matter_a.matter_id,
+                question_id="incident_note",
+                value_type=IntakeValueType.TEXT,
+                value_text="matter a initial",
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+        created_b = playbooks.upsert_intake_answer(
+            UpsertIntakeAnswerCommand(
+                matter_id=matter_b.matter_id,
+                question_id="incident_note",
+                value_type=IntakeValueType.TEXT,
+                value_text="matter b initial",
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+        playbooks.upsert_intake_answer(
+            UpsertIntakeAnswerCommand(
+                matter_id=matter_a.matter_id,
+                question_id="incident_note",
+                value_type=IntakeValueType.TEXT,
+                value_text="matter a updated",
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                expected_row_version=created_a.row_version,
+            )
+        )
+        with pytest.raises(ConcurrencyConflictError):
+            playbooks.upsert_intake_answer(
+                UpsertIntakeAnswerCommand(
+                    matter_id=matter_a.matter_id,
+                    question_id="incident_note",
+                    value_type=IntakeValueType.TEXT,
+                    value_text="cross-matter overwrite",
+                    actor=_ACTOR,
+                    source_channel=_CHANNEL,
+                    expected_row_version=created_b.row_version,
+                )
+            )
+        table = "casework_intake_answers"
+        value_column = "value_text"
+    else:
+        created_a_checklist = playbooks.upsert_checklist_state(
+            UpsertChecklistStateCommand(
+                matter_id=matter_a.matter_id,
+                checklist_item_id="photographs",
+                status=ChecklistItemStatus.MISSING,
+                note="matter a initial",
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+        created_b_checklist = playbooks.upsert_checklist_state(
+            UpsertChecklistStateCommand(
+                matter_id=matter_b.matter_id,
+                checklist_item_id="photographs",
+                status=ChecklistItemStatus.MISSING,
+                note="matter b initial",
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+        playbooks.upsert_checklist_state(
+            UpsertChecklistStateCommand(
+                matter_id=matter_a.matter_id,
+                checklist_item_id="photographs",
+                status=ChecklistItemStatus.PROVIDED,
+                note="matter a updated",
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                expected_row_version=created_a_checklist.row_version,
+            )
+        )
+        with pytest.raises(ConcurrencyConflictError):
+            playbooks.upsert_checklist_state(
+                UpsertChecklistStateCommand(
+                    matter_id=matter_a.matter_id,
+                    checklist_item_id="photographs",
+                    status=ChecklistItemStatus.UNKNOWN,
+                    note="cross-matter overwrite",
+                    actor=_ACTOR,
+                    source_channel=_CHANNEL,
+                    expected_row_version=created_b_checklist.row_version,
+                )
+            )
+        table = "casework_checklist_states"
+        value_column = "note"
+
+    with migrated_engine.connect() as fresh_connection:
+        rows = (
+            fresh_connection.execute(
+                text(
+                    f"SELECT matter_id, {value_column} AS value, row_version "  # noqa: S608
+                    f"FROM {table} WHERE matter_id IN (:matter_a, :matter_b)"  # noqa: S608
+                ),
+                {"matter_a": matter_a.matter_id, "matter_b": matter_b.matter_id},
+            )
+            .mappings()
+            .all()
+        )
+
+    by_matter = {row["matter_id"]: row for row in rows}
+    assert by_matter[matter_a.matter_id]["value"] == "matter a updated"
+    assert by_matter[matter_a.matter_id]["row_version"] == 2
+    assert by_matter[matter_b.matter_id]["value"] == "matter b initial"
+    assert by_matter[matter_b.matter_id]["row_version"] == 1
 
 
 def test_closed_matter_blocks_mutations_but_allows_generate_candidates(
@@ -718,7 +1296,10 @@ def test_retire_version_keeps_existing_pin_readable(migrated_engine: Engine) -> 
 
 
 def test_production_fail_closed_gate_activation_denied(migrated_engine: Engine) -> None:
-    playbooks, _casework, _pr, _cr = _services(migrated_engine, gate=FailClosedGroundingGate())
+    playbooks, _casework, _playbook_repo, _casework_repo = _services(
+        migrated_engine,
+        gate=FailClosedGroundingGate(),
+    )
     draft = playbooks.create_draft(
         CreateDraftCommand(
             playbook_key="synthetic_fail_closed",
@@ -741,4 +1322,135 @@ def test_production_fail_closed_gate_activation_denied(migrated_engine: Engine) 
             text("SELECT status FROM playbook_versions WHERE playbook_version_id = :vid"),
             {"vid": draft.playbook_version_id},
         ).scalar_one()
+        denial_count = connection.execute(
+            text(
+                "SELECT count(*) FROM playbook_audit_events "
+                "WHERE playbook_version_id = :vid "
+                "AND event_type = 'PLAYBOOK_ACTIVATION_DENIED'"
+            ),
+            {"vid": draft.playbook_version_id},
+        ).scalar_one()
     assert status == PlaybookStatus.DRAFT.value
+    assert int(denial_count) == 1
+
+
+def test_connection_bound_activation_denial_audit_survives_outer_rollback(
+    migrated_engine: Engine,
+) -> None:
+    engine_service, _casework, _playbook_repo, _casework_repo = _services(
+        migrated_engine,
+        gate=FailClosedGroundingGate(),
+    )
+    draft = engine_service.create_draft(
+        CreateDraftCommand(
+            playbook_key="synthetic_connection_denial",
+            version=1,
+            display_name="Synthetic connection denial",
+            definition=_synthetic_definition(),
+            actor=_ACTOR,
+        )
+    )
+
+    with migrated_engine.connect() as outer_connection:
+        outer_transaction = outer_connection.begin()
+        connection_service = PlaybookService(
+            PlaybookRepository(outer_connection),
+            CaseworkRepository(outer_connection),
+            FailClosedGroundingGate(),
+        )
+        with pytest.raises(GroundingUnavailable):
+            connection_service.activate_version(
+                ActivateVersionCommand(
+                    playbook_version_id=draft.playbook_version_id,
+                    row_version=draft.row_version,
+                    actor=_ACTOR,
+                )
+            )
+        outer_transaction.rollback()
+
+    with migrated_engine.connect() as fresh_connection:
+        persisted = (
+            fresh_connection.execute(
+                text(
+                    "SELECT status, activated_by, activated_at "
+                    "FROM playbook_versions WHERE playbook_version_id = :vid"
+                ),
+                {"vid": draft.playbook_version_id},
+            )
+            .mappings()
+            .one()
+        )
+        denial_count = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM playbook_audit_events "
+                "WHERE playbook_version_id = :vid "
+                "AND event_type = 'PLAYBOOK_ACTIVATION_DENIED'"
+            ),
+            {"vid": draft.playbook_version_id},
+        ).scalar_one()
+
+    assert persisted["status"] == PlaybookStatus.DRAFT.value
+    assert persisted["activated_by"] is None
+    assert persisted["activated_at"] is None
+    assert int(denial_count) == 1
+
+
+def test_activation_denial_audit_failure_preserves_original_refusal(
+    migrated_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _casework, playbook_repo, _casework_repo = _services(
+        migrated_engine,
+        gate=FailClosedGroundingGate(),
+    )
+    draft = service.create_draft(
+        CreateDraftCommand(
+            playbook_key="synthetic_denial_audit_failure",
+            version=1,
+            display_name="Synthetic denial audit failure",
+            definition=_synthetic_definition(),
+            actor=_ACTOR,
+        )
+    )
+
+    def fail_denial_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise RuntimeError("synthetic independent denial-audit failure")
+
+    monkeypatch.setattr(playbook_repo, "append_playbook_audit", fail_denial_audit)
+
+    with pytest.raises(PlaybookAuditWriteFailed) as raised:
+        service.activate_version(
+            ActivateVersionCommand(
+                playbook_version_id=draft.playbook_version_id,
+                row_version=draft.row_version,
+                actor=_ACTOR,
+            )
+        )
+
+    assert isinstance(raised.value.__cause__, GroundingUnavailable)
+    with migrated_engine.connect() as fresh_connection:
+        persisted = (
+            fresh_connection.execute(
+                text(
+                    "SELECT status, activated_by, activated_at "
+                    "FROM playbook_versions WHERE playbook_version_id = :vid"
+                ),
+                {"vid": draft.playbook_version_id},
+            )
+            .mappings()
+            .one()
+        )
+        denial_count = fresh_connection.execute(
+            text(
+                "SELECT count(*) FROM playbook_audit_events "
+                "WHERE playbook_version_id = :vid "
+                "AND event_type = 'PLAYBOOK_ACTIVATION_DENIED'"
+            ),
+            {"vid": draft.playbook_version_id},
+        ).scalar_one()
+
+    assert persisted["status"] == PlaybookStatus.DRAFT.value
+    assert persisted["activated_by"] is None
+    assert persisted["activated_at"] is None
+    assert int(denial_count) == 0
