@@ -12,11 +12,11 @@
 
 ```text
 LEGAL_AI_MASTER_BLUEPRINT.md   → North Star architecture (unchanged)
-CLAUDE.md                         → Full Root Constitution (unchanged, ~100 lines)
+PROJECT_GOVERNANCE.md             → Full Root Constitution (unchanged, ~100 lines)
 docs/execution/MVP_ROADMAP.md     → This file: current execution scope
 docs/adr/0001-product-purpose.md  → Portfolio-quality internal prototype
-AGENTS.md                         → Short practical Codex execution rules
-.cursor/rules/                    → Path-scoped review rules
+ENGINEERING_WORKFLOW.md           → Short practical engineering workflow
+Repository workflow controls     → Path-scoped review rules
 ```
 
 ## 2. Product Purpose (ADR 0001 content)
@@ -188,7 +188,7 @@ WA adapter; expanded corpus; full acceptance set (40–60); minimal UI with clic
 
 ---
 
-## 13. Codex Sprint 0 Task (copy-paste)
+## 13. Sprint 0 Implementation Task
 
 ```
 TASK: Sprint 0 — Engineering foundation for `australian-legal-ai`
@@ -213,7 +213,7 @@ IN SCOPE:
 OUT OF SCOPE / FORBIDDEN:
 - No FastAPI, SQLAlchemy, frontend, Node
 - No API keys, model SDKs, external HTTP calls
-- No changes to CLAUDE.md, AGENTS.md, or LEGAL_AI_MASTER_BLUEPRINT.md
+- No changes to PROJECT_GOVERNANCE.md, ENGINEERING_WORKFLOW.md, or LEGAL_AI_MASTER_BLUEPRINT.md
 - No application packages beyond the empty __init__.py
 
 ACCEPTANCE CRITERIA:
@@ -229,7 +229,7 @@ EVIDENCE REQUIRED:
 ROLLBACK: branch `feat/sprint-0-foundation`; if rejected, delete branch; main untouched.
 ```
 
-## 14. Cursor Review Checklist (after Codex)
+## 14. Independent Review Checklist
 
 ```
 Review this Sprint 0 diff as a security-minded senior engineer. Check:
@@ -247,9 +247,9 @@ Merge only with zero Critical/High findings.
 
 ## 15. Standing Rules
 
-1. One Codex task, one branch; owner reviews diff before merge.
+1. One bounded task, one branch; owner reviews diff before merge.
 2. No legal proposition without verified source + pinpoint — enforced in code, not only prompts.
 3. The system never presents itself as a lawyer; disclaimers are permanent UI elements.
 4. Model memory is never authority; fail closed on any retrieval/verification failure.
 5. Every deferred capability requires its own ADR before implementation.
-6. **Planning freeze:** no further revisions to this roadmap except via ADR recording a concrete blocker discovered during execution.
+6. **Planning freeze:** no further revisions to this roadmap except via ADR recording a concrete blocker discovered during execution. ADR 0011 authorises only this terminology and governance-reference update; it does not alter execution scope.

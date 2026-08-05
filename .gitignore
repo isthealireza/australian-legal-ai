@@ -17,9 +17,6 @@ build/
 *.p12
 *.pfx
 
-# Local Claude Code settings
-.claude/settings.local.json
-
 # Logs and coverage
 *.log
 .coverage
@@ -42,7 +39,6 @@ dist/
 # IDE / OS
 .vscode/
 .idea/
-.cursor-cache/
 .DS_Store
 Thumbs.db
 desktop.ini

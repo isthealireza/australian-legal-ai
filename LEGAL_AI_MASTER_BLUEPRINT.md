@@ -64,61 +64,61 @@ The system, in all planned versions:
 
 ---
 
-# 3. Operating Model: Humans and Tools
+# 3. Operating Model: Engineering Roles
 
 ## 3.1 Project Owner
 
 The repository owner is the human user and final decision-maker. Responsibilities: approve scope and business requirements; maintain the repository and branches; run tasks; review diffs; approve merges; decide provider, budget, data residency, and retention; designate authorised people; obtain real legal advice where required; approve production releases.
 
-## 3.2 Planning Assistant (architecture/design AI)
+## 3.2 Architecture and Design Review
 
 Roles: Software Architect · Full-Stack Technical Lead · AI Systems Architect · Security Reviewer · Legal AI Governance Adviser · Task Designer · Acceptance-Criteria Designer · Diff and Evidence Reviewer · Step-by-Step Technical Coach.
 
-By default the planning assistant does not write project code in place of the owner. Its job is task design, output review, risk detection, explanation, and architectural consistency.
+By default, this role does not write project code in place of the owner and does not replace the owner's decision-making. Its responsibilities are task design, output review, risk detection, explanation, and architectural consistency.
 
-## 3.3 Codex — Primary Implementation Agent
+## 3.3 Implementation Workflow
 
-**Codex executes repository-level changes.** Suitable for: multi-file builds; refactors; test generation; running lint, type checks, and tests; producing diffs; providing terminal evidence; working in an isolated branch or worktree; fixing review findings; preparing review-ready changes.
+**The implementation workflow executes repository-level changes.** It covers multi-file builds; refactors; test creation; running lint, type checks, and tests; producing diffs; providing terminal evidence; working in an isolated branch or worktree; fixing approved review findings; and preparing review-ready changes.
 
-> Rule: Codex is an executor, not an architecture decision-maker.
+> Rule: implementation does not make architecture decisions without owner-approved scope.
 
-Every Codex task MUST include: a bounded goal; in-scope and out-of-scope lists; allowed files; acceptance criteria; test commands; forbidden changes; rollback instructions; evidence requirements.
+Every implementation task MUST include: a bounded goal; in-scope and out-of-scope lists; allowed files; acceptance criteria; test commands; forbidden changes; rollback instructions; evidence requirements.
 
-## 3.4 Cursor with Claude — IDE and Interactive Reviewer
+## 3.4 Independent Review
 
-Cursor is used for: fast repository exploration; understanding file relationships; questions about a specific line or function; manual diff review; architecture review; security review; pair programming; very small urgent fixes; explaining code and tests.
+Independent review covers repository exploration; file relationships; specific lines or functions; manual diff review; architecture review; security review; and explanation of code and tests.
 
-Cursor is NOT responsible for autonomously building an entire phase.
+Independent review is read-only unless a separately bounded implementation task authorises changes.
 
-## 3.5 Real Claude Code — Runtime-Specific Security Testing
+## 3.5 Development Environment Security Validation
 
-Using Claude inside Cursor is NOT equivalent to the Claude Code runtime. Test ONLY in real Claude Code: `.claude/settings.json`; permission modes; PreToolUse/PostToolUse hooks; managed settings; sandbox; filesystem/network restrictions; MCP tool names and schemas; custom agents; skills; `bypassPermissions` posture; hook failure behaviour.
+Validate the actual development environment's permission modes, managed settings, sandbox, filesystem and network restrictions, configured tool names and schemas, local automation controls, failure behaviour, and any mechanism capable of bypassing normal permissions.
 
 Preferred test environment: WSL2/Linux, or a Linux container/VM. Do not rely on native Windows as a security boundary.
 
-## 3.6 Official Tool Workflow
+## 3.6 Engineering Workflow
 
-| Activity | Primary tool |
+| Activity | Responsible role |
 |---|---|
-| Architecture and task design | Planning assistant + owner |
-| Repository implementation | Codex |
-| Tests and evidence | Codex |
-| Manual diff review | Cursor + owner |
-| Adversarial review | Cursor/Claude or an independent Codex task |
-| Review remediation | Codex |
-| Claude-specific security testing | Claude Code on WSL2/Linux |
+| Architecture and task design | Architecture and Design Review + owner |
+| Repository implementation | Implementation Workflow |
+| Tests and evidence | Implementation Workflow |
+| Manual diff review | Independent Review + owner |
+| Adversarial review | Independent Review |
+| Review remediation | Implementation Workflow under approved scope |
+| Development-environment security validation | Security Review on WSL2/Linux |
 | Merge approval | Owner |
 | Legal approval | Qualified human/lawyer |
 
-Two agents must never hold simultaneous write access to the same branch and files.
+Two contributors must never hold simultaneous write access to the same branch and files.
 
 ---
 
 # 4. Root Operating Constitution
 
-The governance file MUST exist at repository root with exactly this name: `CLAUDE.md`.
+The governance file MUST exist at repository root with exactly this name: `PROJECT_GOVERNANCE.md`.
 
-Files such as `CLAUDE.reviewed.md`, `CLAUDE_v3.md`, or `CLAUDE-final-copy.md` are NOT the root constitution. Superseded versions live only in `docs/archive/governance/`.
+Files such as `PROJECT_GOVERNANCE.reviewed.md`, `PROJECT_GOVERNANCE_v3.md`, or `PROJECT_GOVERNANCE-final-copy.md` are NOT the root constitution. Superseded versions live only in `docs/archive/governance/`.
 
 ## 4.1 The Triad
 
@@ -262,8 +262,8 @@ NOT: `One autonomous agent + shell + browser + email + memory`.
 
 ```text
 australian-legal-ai/
-├── AGENTS.md
-├── CLAUDE.md
+├── ENGINEERING_WORKFLOW.md
+├── PROJECT_GOVERNANCE.md
 ├── README.md
 ├── SECURITY.md
 ├── CONTRIBUTING.md
@@ -274,8 +274,6 @@ australian-legal-ai/
 ├── .env.example
 ├── .gitignore
 ├── .pre-commit-config.yaml
-├── .cursor/            (rules/, commands/)
-├── .claude/            (settings.json, hooks/, agents/, rules/, skills/)
 ├── apps/               (api/, web/, workers/)
 ├── packages/           (contracts/, policy/, observability/, ui/)
 ├── workflows/          (router.yaml, matter_intake.md, conflict_check.md,
@@ -579,7 +577,7 @@ Artifact provenance records: AI involvement · workflow version · model version
 
 ---
 
-# 25. Claude Code Enforcement
+# 25. Development Environment Security Validation
 
 Order of reliance:
 
@@ -588,7 +586,7 @@ Managed settings → sandbox/OS controls → local blocking hooks
 → permission rules → prose instructions
 ```
 
-Rules: `bypassPermissions` disabled for production · never invent hypothetical MCP tool names · enumerate real tool names in the deployment · negative-test every deny rule · a file-tool deny alone does not constrain Bash · network allowlist at OS/sandbox level · no critical control may exist only as a remote HTTP hook · absence of a required control triggers fail-closed.
+Rules: permission-bypass mechanisms disabled for production · never invent hypothetical tool names · enumerate real tool names in the deployment · negative-test every deny rule · a file-tool deny alone does not constrain shell access · network allowlist at OS/sandbox level · no critical control may exist only as a remote HTTP hook · absence of a required control triggers fail-closed.
 
 ---
 
@@ -622,7 +620,7 @@ retrieval recall@K · citation precision · pinpoint accuracy · authority corre
 repealed law · future amendment not commenced · transitional provisions · incomplete OCR · missing annexures · fake cases · real citations that do not support the claim · negative treatment · wrong jurisdiction · prompt injection in a contract · prompt injection in an email · malicious tool output · same-name parties · deadlines around holidays/weekends · hash-mismatched approvals · expired approvals · approval replay · provider timeouts · audit failure · retrieval failure · cross-matter access · privileged text in logs.
 
 ## 27.3 Release Gate
-Material changes requiring a gate: CLAUDE.md · AGENTS.md · rules · skills · workflows · agents · tools · models · source parsers · MCP servers · hooks · permissions · data schemas · policy engine.
+Material changes requiring a gate: PROJECT_GOVERNANCE.md · ENGINEERING_WORKFLOW.md · rules · skills · workflows · agents · tools · models · source parsers · tool servers · hooks · permissions · data schemas · policy engine.
 
 Release evidence: full test suite · security tests · eval results · diff · migration plan · rollback plan · unresolved risks · approval owner.
 
@@ -643,7 +641,7 @@ Release evidence: full test suite · security tests · eval results · diff · m
 > The active execution scope is `docs/execution/MVP_ROADMAP.md`. The phases below define the full journey.
 
 - **Phase 0 — Development Foundation:** toolchain, repository, Git strategy, package management, lint/format/type/test, pre-commit, CI, security scanning, ADR framework. Exit: clean repo, deterministic install, locked dependencies, green CI, documented rollback.
-- **Phase 1 — Governance and Security Foundation:** approved root `CLAUDE.md`, `AGENTS.md`, Cursor rules, initial Claude settings skeleton, policy documents, L/R schemas, approval schema, workflow router skeleton, audit event schema, negative-test specifications. Exit: no contradictions, root frozen/tagged, schema tests, documented residual permission/hook risks, no external integrations.
+- **Phase 1 — Governance and Security Foundation:** approved root `PROJECT_GOVERNANCE.md`, `ENGINEERING_WORKFLOW.md`, repository workflow controls, development-environment security controls, policy documents, L/R schemas, approval schema, workflow router skeleton, audit event schema, negative-test specifications. Exit: no contradictions, root frozen/tagged, schema tests, documented residual permission/hook risks, no external integrations.
 - **Phase 2 — Official Legal Source Supply Chain:** source registry, Federal Register API adapter, WA feed adapter, immutable raw store, hash/version lineage, secure parsing, quarantine, publication gate, freshness monitoring. Exit: fixtures, replay/idempotency, malformed-payload tests, source allowlist, TLS/timeout/size limits, no LLM involvement.
 - **Phase 3 — Document Ingestion:** upload, malware/type gate, PDF/DOCX extraction, OCR, provenance, matter isolation, injection scanning. Exit: immutable originals, coordinates retained, OCR quality surfaced, malicious files quarantined, missing pages/attachments detected.
 - **Phase 4 — Data and Access Platform:** PostgreSQL, migrations, object storage, identity, RBAC/ABAC, RLS, audit store, approval persistence. Exit: isolation tests, access matrix, backup/restore, no cross-matter leakage.
@@ -662,7 +660,7 @@ Release evidence: full test suite · security tests · eval results · diff · m
 
 For every task:
 
-1. task brief by the planning assistant; 2. new branch/worktree; 3. bounded Codex prompt; 4. Codex implementation and tests; 5. inspect terminal evidence; 6. Cursor manual review without edits; 7. record review findings; 8. Codex fixes only the findings; 9. full test suite; 10. final diff review; 11. commit; 12. release gate if material; 13. merge by the owner.
+1. owner-approved task brief; 2. new branch/worktree; 3. bounded implementation task; 4. implementation and tests; 5. inspect terminal evidence; 6. independent review without edits; 7. record review findings; 8. implement only approved findings; 9. full test suite; 10. final diff review; 11. commit; 12. release gate if material; 13. merge by the owner.
 
 ## 30.1 Branch Naming
 
@@ -682,14 +680,14 @@ docs(adr): record policy-engine decision
 
 ---
 
-# 31. Prompt Template for Codex
+# 31. Implementation Task Template
 
 ```text
 Task: <short title>
 
 Read first:
-- AGENTS.md
-- CLAUDE.md
+- ENGINEERING_WORKFLOW.md
+- PROJECT_GOVERNANCE.md
 - <relevant ADRs/policies>
 
 Goal:
@@ -735,14 +733,14 @@ Stop conditions:
 
 ---
 
-# 32. Prompt Template for Cursor Review
+# 32. Independent Review Template
 
 ```text
 Review only. Do not edit files.
 
 Read:
-- CLAUDE.md
-- AGENTS.md
+- PROJECT_GOVERNANCE.md
+- ENGINEERING_WORKFLOW.md
 - relevant policy/workflow
 - current diff
 
@@ -768,7 +766,7 @@ Report:
 
 ---
 
-# 33. Claude Code Security Validation Template
+# 33. Development Environment Security Validation Template
 
 ```text
 Environment: WSL2/Linux
@@ -780,15 +778,15 @@ Validate:
 2. bypass disabled
 3. .env blocked through Read and shell
 4. network allowlist
-5. PreToolUse critical blocking
+5. critical pre-execution blocking
 6. hook absence detection
-7. MCP tool names match deployed schema
+7. configured tool names match deployed schemas
 8. privileged egress blocked
 9. L5/L6 attempts blocked
 10. audit failure causes fail-closed
 
 Record:
-- Claude Code version
+- development-environment version
 - OS
 - settings scope
 - exact command
@@ -802,11 +800,11 @@ Record:
 
 # 34. Current Project Status
 
-**Approved/design-complete:** product mission · non-lawyer boundary · L0–L6 authority model · R0–R4 risk model · retrieval fail-closed · artifact-bound approval concept · matter isolation principle · memory separation · skill quarantine · Codex/Cursor/Claude Code role split · official-source-first approach · hybrid retrieval direction · phased delivery · eval and release-gate requirements.
+**Approved/design-complete:** product mission · non-lawyer boundary · L0–L6 authority model · R0–R4 risk model · retrieval fail-closed · artifact-bound approval concept · matter isolation principle · memory separation · skill quarantine · role-separated engineering workflow · official-source-first approach · hybrid retrieval direction · phased delivery · eval and release-gate requirements.
 
 **Reference material available:** reviewed Root Constitution · engineering reviews · prior prototypes and ZIPs · initial architecture discussions · scheduled monthly monitoring of Australian Legal AI technology/regulatory changes.
 
-**Not yet production-complete:** owner-rebuilt repository from zero · final Git history · actual managed Claude settings · tested hooks · identity provider · approval persistence · source adapters · database · retrieval · AI runtime · frontend · external integrations · production audit · privacy impact assessment · legal review · penetration test · deployment.
+**Not yet production-complete:** owner-rebuilt repository from zero · final Git history · actual managed development-environment controls · tested hooks · identity provider · approval persistence · source adapters · database · retrieval · AI runtime · frontend · external integrations · production audit · privacy impact assessment · legal review · penetration test · deployment.
 
 Previously generated ZIPs are references/prototypes only unless independently reviewed, reconstructed, and accepted into the new repository.
 
@@ -820,8 +818,6 @@ Run and record:
 
 ```powershell
 git --version
-cursor --version
-codex --version
 uv --version
 uv python list
 python --version
@@ -844,24 +840,23 @@ Set-Location australian-legal-ai
 git init
 git branch -M main
 git status
-cursor .
 ```
 
 Do not copy prior ZIP contents.
 
 ## Step 2 — Establish Governance Files
 
-The first commit contains only: `CLAUDE.md` · `AGENTS.md` · this Master Blueprint · `docs/execution/MVP_ROADMAP.md` · `.gitignore` · `docs/adr/README.md` · archived superseded governance if needed. No FastAPI, Next.js, database, agent, or network integration yet. (The root `README.md` is a Sprint 0 deliverable produced by Codex.)
+The first commit contains only: `PROJECT_GOVERNANCE.md` · `ENGINEERING_WORKFLOW.md` · this Master Blueprint · `docs/execution/MVP_ROADMAP.md` · `.gitignore` · `docs/adr/README.md` · archived superseded governance if needed. No FastAPI, Next.js, database, agent, or network integration yet. (The root `README.md` is a Sprint 0 deliverable.)
 
 ## Step 3 — Freeze Constitution
 
-Place the reviewed constitution at repository root as `CLAUDE.md`; archive previous versions; run the contradiction checklist; commit; tag `governance-v1.0.0`.
+Place the reviewed constitution at repository root as `PROJECT_GOVERNANCE.md`; archive previous versions; run the contradiction checklist; commit; tag `governance-v1.0.0`.
 
-## Step 4 — Codex Sprint 0 Task
+## Step 4 — Sprint 0 Implementation Task
 
 Engineering foundation only: package management, lint/format/type/test, pre-commit, CI. No application features, no external services, no model calls. (Full task text: `docs/execution/MVP_ROADMAP.md` §13.)
 
-## Step 5 — Cursor Review
+## Step 5 — Independent Review
 
 Review dependency choices, scripts, CI, secrets risk, Windows/WSL portability, unnecessary frameworks.
 
@@ -881,9 +876,9 @@ Git main exists · branch protection plan documented · Python version pinned ·
 
 | Decision | Current choice | Status |
 |---|---|---|
-| Primary implementation agent | Codex | Approved |
-| Daily IDE/review | Cursor + Claude | Approved |
-| Claude runtime testing | Claude Code on WSL2/Linux | Approved |
+| Primary implementation role | Bounded repository implementation | Approved |
+| Daily review | Independent diff review | Approved |
+| Development-environment security testing | Controlled WSL2/Linux environment | Approved |
 | Backend language | Python | Approved |
 | Backend framework | FastAPI, when a phase requires it | Provisional |
 | Frontend | Next.js + TypeScript | Provisional |
@@ -917,14 +912,11 @@ Every forum may impose different disclosure and AI-use rules. Blanket footers or
 
 # 40. Source References
 
-1. OpenAI Codex: https://openai.com/codex/ · https://openai.com/business/solutions/engineering/ · https://openai.com/index/harness-engineering/
-2. Cursor rules and CLI: https://docs.cursor.com/context/rules-for-ai · https://docs.cursor.com/en/cli/using
-3. Anthropic Claude Code: https://docs.anthropic.com/en/docs/claude-code/getting-started · https://docs.anthropic.com/en/docs/claude-code/cli-usage
-4. Federal Court of Australia GPN-AI: https://www.fedcourt.gov.au/law-and-practice/practice-documents/practice-notes/gpn-ai
-5. OAIC guidance: https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/guidance-on-privacy-and-the-use-of-commercially-available-ai-products
-6. Legal Practice Board of WA: https://www.lpbwa.org.au/artificial-intelligence-joint-statement
-7. Federal Register of Legislation API: https://www.legislation.gov.au/help-and-resources/using-the-legislation-register/data-share-and-reuse
-8. WA Legislation notification feeds: https://www.legislation.wa.gov.au/legislation/statutes.nsf/feeds.html
+1. Federal Court of Australia GPN-AI: https://www.fedcourt.gov.au/law-and-practice/practice-documents/practice-notes/gpn-ai
+2. OAIC guidance: https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/guidance-on-privacy-and-the-use-of-commercially-available-ai-products
+3. Legal Practice Board of WA: https://www.lpbwa.org.au/artificial-intelligence-joint-statement
+4. Federal Register of Legislation API: https://www.legislation.gov.au/help-and-resources/using-the-legislation-register/data-share-and-reuse
+5. WA Legislation notification feeds: https://www.legislation.wa.gov.au/legislation/statutes.nsf/feeds.html
 
 ---
 
@@ -936,7 +928,7 @@ From this date forward:
 
 No significant architectural decision lives only in chat; decisions are recorded here or in ADRs.
 
-No agent is turned loose on the repository without a bounded task and acceptance criteria.
+No contributor works on the repository without a bounded task and acceptance criteria.
 
 No legal answer is reliable without a verified source and pinpoint.
 

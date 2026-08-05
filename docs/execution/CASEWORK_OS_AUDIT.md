@@ -113,8 +113,8 @@ Do not delete, replace, rename, or weaken them.
 |---|---|
 | `MVP_ROADMAP.md` §11 / §11A | **Resolved for Phase 1 planning.** §11 “Not now” retained; §11A gates Casework Phase 1 foundation as in scope to plan only. Remainder of “Not now” (email, dispatch, Temporal, production, real client data, etc.) stays frozen. |
 | `MVP_ROADMAP.md` §3–5 / §12 | **Dual-track.** Grounded Q&A research remains shared platform work; Casework workstreams follow `CASEWORK_OS_ROADMAP.md` only. |
-| `CLAUDE.md` §3 MVP note | **Preserved.** Only L0–L2 without dedicated ADR; L3+ still needs dedicated ADR. ADR 0009 does not authorise L3+. |
-| `AGENTS.md` | **Preserved.** Protected files changed only under this owner authorisation (§11A + ADR acceptance). |
+| `PROJECT_GOVERNANCE.md` §3 MVP note | **Preserved.** Only L0–L2 without dedicated ADR; L3+ still needs dedicated ADR. ADR 0009 does not authorise L3+. |
+| `ENGINEERING_WORKFLOW.md` | **Preserved.** Protected files changed only under this owner authorisation (§11A + ADR acceptance). |
 | `LEGAL_AI_MASTER_BLUEPRINT.md` | **Aligned.** Matters, playbooks, approvals, L0–L6, fail-closed retrieval. |
 | Grounding / fail-closed / no real client data | **Aligned.** Unsupported cases stay `RESEARCH_AND_DRAFT_ONLY`. |
 
@@ -162,8 +162,8 @@ implement modular `casework/` and `playbooks/` beside existing modules.
 
 Exact owner approval remains required before changing:
 
-1. `CLAUDE.md`
-2. `AGENTS.md`
+1. `PROJECT_GOVERNANCE.md`
+2. `ENGINEERING_WORKFLOW.md`
 3. `LEGAL_AI_MASTER_BLUEPRINT.md`
 4. `docs/execution/MVP_ROADMAP.md` (beyond the owner-authorised §11 / §11A edits in this finalisation)
 5. Existing ADRs `0001`–`0008` (content)
@@ -175,9 +175,9 @@ approval.
 
 ---
 
-## 8. Proposed Cursor rules and hooks (not implemented in Phase 0)
+## 8. Proposed repository workflow controls (not implemented in Phase 0)
 
-Documented for later review; Phase 0 does not create `.cursor/rules` or hooks:
+Documented for later review; Phase 0 does not create additional repository rules or hooks:
 
 - Path-scoped rules for Python verification, migrations, evidence/provenance,
   integrations/network, approvals/actions, frontend privacy, and evals.
