@@ -1,6 +1,6 @@
 # Implementation Status — Phase Ledger
 
-**Last updated:** 2026-08-05
+**Last updated:** 2026-08-06
 
 ## Phase status
 
@@ -37,17 +37,17 @@
 - `wa_motor_property_damage_v1` seeded as validated **DRAFT** only
 - Phase 3: **Not Started**
 
-## Branch and baseline
+## Phase 2 implementation branch and baseline (historical)
 
-- **Branch:** `feat/phase-2-playbook-framework`
+- **Historical feature branch:** `feat/phase-2-playbook-framework`
 - **Starting main SHA:** `5498cfd6e246e03defc4bfbf2b0b709780c0b3d4`
 - **Merge commit:** `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942` (PR #11)
 - **Implementation CI:** GitHub Actions run `31020315828` completed successfully
   on the merge commit, including secret scan, lint, formatting, strict mypy,
   unit tests, and PostgreSQL integration tests
 - **Alembic source head:** `0006_playbook_framework`
-- **Status rule:** Phase 2 completion is recorded by this docs-only follow-up
-  after implementation PR #11 merged successfully
+- **Completion ledger:** PR #12 merged to `main` @
+  `960793410fc33c40501e3a92adb6ee41b6669eb7`
 
 ## Grounding security boundary
 
@@ -70,12 +70,11 @@ Integration suite executed against disposable `postgres:16-alpine`.
 
 ## Blockers and approval gates
 
-1. Push/PR/merge require separate owner publication authorisation.
-2. Phase 2 implementation is merged; this docs-only follow-up records completion.
-3. No product playbook may become ACTIVE until Phase 4 grounding gate is met.
-4. Every L3+ capability blocked until a dedicated ADR and controls exist.
+1. No product playbook may become ACTIVE until Phase 4 grounding gate is met.
+2. Every L3+ capability remains blocked until a dedicated ADR and controls exist.
 
 ## Exact next action
 
-Owner review and merge of `docs/phase-2-completion-ledger`. Phase 3 remains
-**Not Started** and must not begin without a separately approved bounded task.
+Phase 3 remains **Not Started**. Phase 3 requires an owner-approved architecture
+decision and a separately authorised bounded implementation task. No Phase 3
+implementation is authorised by this documentation update.
