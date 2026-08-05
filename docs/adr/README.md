@@ -11,3 +11,4 @@ Sprint 1.3B2B1 adds: [0008 Deterministic unambiguous paragraph recognition](0008
 Phase 0 accepts: [0009 Casework OS product pivot and first operational vertical](0009-casework-os-product-pivot.md).
 Phase 2 accepts: [0010 Phase 2 playbook framework](0010-phase-2-playbook-framework.md).
 Governance standardization accepts: [0011 Governance and engineering terminology](0011-governance-and-engineering-terminology.md).
+Phase 3 accepts: [0012 Matter Evidence Vault and Safe Upload Boundary](0012-matter-evidence-vault-and-upload-boundary.md).
