@@ -6,7 +6,12 @@ from legal_ai.casework.errors import InvalidTransitionError
 from legal_ai.casework.types import CaseType, MatterStatus
 
 _ALLOWED: dict[MatterStatus, frozenset[MatterStatus]] = {
-    MatterStatus.INTAKE_INCOMPLETE: frozenset({MatterStatus.INTAKE_COMPLETE}),
+    MatterStatus.INTAKE_INCOMPLETE: frozenset(
+        {
+            MatterStatus.INTAKE_COMPLETE,
+            MatterStatus.RESEARCH_AND_DRAFT_ONLY,
+        }
+    ),
     MatterStatus.INTAKE_COMPLETE: frozenset(
         {
             MatterStatus.ACTIVE,
@@ -79,6 +84,13 @@ def assert_transition_allowed(
         current is MatterStatus.INTAKE_COMPLETE
         and target is MatterStatus.ACTIVE
         and case_type is CaseType.UNSUPPORTED
+    ):
+        raise InvalidTransitionError(current=current, target=target)
+
+    if (
+        current is MatterStatus.INTAKE_INCOMPLETE
+        and target is MatterStatus.RESEARCH_AND_DRAFT_ONLY
+        and case_type is not CaseType.UNSUPPORTED
     ):
         raise InvalidTransitionError(current=current, target=target)
 

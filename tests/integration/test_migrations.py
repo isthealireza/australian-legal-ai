@@ -9,7 +9,7 @@ from .conftest import alembic_config
 
 pytestmark = pytest.mark.integration
 
-_REVISION = "0005_casework_core"
+_REVISION = "0006_playbook_framework"
 _PROVENANCE_TABLES = {
     "provenance_artifacts",
     "source_document_captures",

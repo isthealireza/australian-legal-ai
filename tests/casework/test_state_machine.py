@@ -15,6 +15,23 @@ def test_intake_incomplete_to_complete_allowed() -> None:
     )
 
 
+def test_intake_incomplete_to_research_only_allowed_for_unsupported() -> None:
+    assert_transition_allowed(
+        current=MatterStatus.INTAKE_INCOMPLETE,
+        target=MatterStatus.RESEARCH_AND_DRAFT_ONLY,
+        case_type=CaseType.UNSUPPORTED,
+    )
+
+
+def test_intake_incomplete_to_research_only_forbidden_when_not_unsupported() -> None:
+    with pytest.raises(InvalidTransitionError):
+        assert_transition_allowed(
+            current=MatterStatus.INTAKE_INCOMPLETE,
+            target=MatterStatus.RESEARCH_AND_DRAFT_ONLY,
+            case_type=CaseType.UNASSIGNED,
+        )
+
+
 def test_intake_complete_to_active_forbidden_when_unsupported() -> None:
     with pytest.raises(InvalidTransitionError):
         assert_transition_allowed(
