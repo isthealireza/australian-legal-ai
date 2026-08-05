@@ -1,6 +1,6 @@
 # Implementation Status — Phase Ledger
 
-**Last updated:** 2026-08-04
+**Last updated:** 2026-08-05
 
 ## Phase status
 
@@ -8,7 +8,7 @@
 |---|---|
 | Phase 0 — Repository audit and product-pivot decision | **Completed** (merged to `main` @ `9cd74bad53f774dabaf976cbd47325335bf133d9`, PR #8) |
 | Phase 1 — Generic matter core | **Completed** (merged to `main` @ `8766468e00be2dc79b7eda08baec713d5356654d`, PR #9) |
-| Phase 2 — Playbook registry and WA motor playbook | **Implementation Complete; Merge Pending** |
+| Phase 2 — Playbook registry and WA motor playbook | **Completed** (merged to `main` @ `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942`, PR #11) |
 | Phase 3 — Evidence vault extension | Not Started |
 | Phase 4 — Research and evidence packets | Not Started |
 | Phase 5 — Drafting with mock model | Not Started |
@@ -26,7 +26,8 @@
 - ADR 0010: **Accepted** (2026-08-04); prospectively authorises the bounded
   Phase 2 implementation for completion and merge review from that date
 - Phase 1 Generic Casework Core: **Completed** on `main`
-- Phase 2 Versioned Playbook Framework: implemented on `feat/phase-2-playbook-framework`
+- Phase 2 Versioned Playbook Framework: **Completed** on `main` via PR #11 @
+  `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942`
 - Phase 2 WA motor scope is limited to parked/unattended vehicle property
   damage; unsupported and definition-disqualified matters fail closed to
   `RESEARCH_AND_DRAFT_ONLY` where the pinned definition requires it
@@ -40,9 +41,13 @@
 
 - **Branch:** `feat/phase-2-playbook-framework`
 - **Starting main SHA:** `5498cfd6e246e03defc4bfbf2b0b709780c0b3d4`
+- **Merge commit:** `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942` (PR #11)
+- **Implementation CI:** GitHub Actions run `31020315828` completed successfully
+  on the merge commit, including secret scan, lint, formatting, strict mypy,
+  unit tests, and PostgreSQL integration tests
 - **Alembic source head:** `0006_playbook_framework`
-- **Status rule:** do not mark Phase 2 **Completed** until the implementation PR
-  is merged; then update the ledger on `main` via a docs-only follow-up
+- **Status rule:** Phase 2 completion is recorded by this docs-only follow-up
+  after implementation PR #11 merged successfully
 
 ## Grounding security boundary
 
@@ -66,11 +71,11 @@ Integration suite executed against disposable `postgres:16-alpine`.
 ## Blockers and approval gates
 
 1. Push/PR/merge require separate owner publication authorisation.
-2. Phase 2 **Completed** only after merge + docs follow-up on `main`.
+2. Phase 2 implementation is merged; this docs-only follow-up records completion.
 3. No product playbook may become ACTIVE until Phase 4 grounding gate is met.
 4. Every L3+ capability blocked until a dedicated ADR and controls exist.
 
 ## Exact next action
 
-Owner review and publication of `feat/phase-2-playbook-framework`. Do not start
-Phase 3. Do not push or open a PR without separate authorisation.
+Owner review and merge of `docs/phase-2-completion-ledger`. Phase 3 remains
+**Not Started** and must not begin without a separately approved bounded task.
