@@ -83,15 +83,15 @@ If any required control is unavailable — retrieval, source verification, appro
 
 ## 9. Engineering Governance
 
-1. Every change: requirement → task with bounded scope and acceptance criteria → implementation on a dedicated branch → tests → diff → review → owner merge. No agent works on the repository without a bounded task.
+1. Every change: requirement → task with bounded scope and acceptance criteria → implementation on a dedicated branch → tests → diff → review → owner merge. No contributor works on the repository without a bounded task.
 2. No change enters `main` without tests, diff, evidence, and rollback instructions.
-3. Two agents never hold simultaneous write access to the same branch/files.
+3. Two contributors never hold simultaneous write access to the same branch/files.
 4. Significant decisions are recorded in ADRs, not left in chat.
 5. Audit-relevant events (ingestion, retrieval failures, refusals, validation rejections) are logged.
 
 ## 10. Precedence
 
-Order of authority: this file → `docs/execution/MVP_ROADMAP.md` → `AGENTS.md` → task instructions → everything else. Superseded governance versions are archived in `docs/archive/governance/` and have no force.
+Order of authority: `PROJECT_GOVERNANCE.md` → `docs/execution/MVP_ROADMAP.md` → `ENGINEERING_WORKFLOW.md` → approved task instructions → other repository documents. Superseded governance versions are archived in `docs/archive/governance/` and have no force.
 
 ---
 **End of Root Constitution**

@@ -7,9 +7,10 @@
 
 ## Precedence
 
-Authority order remains: `CLAUDE.md` → `docs/execution/MVP_ROADMAP.md` (including
-§11A) → `AGENTS.md` → task instructions. `LEGAL_AI_MASTER_BLUEPRINT.md` is the
-north-star architecture and does not override that order.
+Authority order remains: `PROJECT_GOVERNANCE.md` → `docs/execution/MVP_ROADMAP.md` (including
+§11A) → `ENGINEERING_WORKFLOW.md` → approved task instructions → other repository
+documents. `LEGAL_AI_MASTER_BLUEPRINT.md` is the north-star architecture and
+does not override that order.
 
 This document applies **only to Casework workstreams**. The grounded-research
 sprint plan in `MVP_ROADMAP.md` §12 remains the binding profile for shared
@@ -242,7 +243,7 @@ rollback; restricted-access plan.
 
 ---
 
-## Follow-on owner actions (not agent-executable alone)
+## Follow-on owner actions (requiring explicit owner action)
 
 1. Approve a separate bounded Phase 1 plan before any Phase 1 product code.
 2. Approve provider accounts, OAuth, credentials, and any private-alpha deploy.

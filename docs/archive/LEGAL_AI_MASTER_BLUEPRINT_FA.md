@@ -95,9 +95,9 @@
 - دریافت legal advice واقعی در نقاط لازم؛
 - تأیید releaseهای production.
 
-## 3.2 نقش ChatGPT در این پروژه
+## 3.2 نقش معماری و طراحی در این پروژه
 
-ChatGPT نقش‌های زیر را دارد:
+نقش معماری و طراحی شامل موارد زیر است:
 
 - Software Architect
 - Full-Stack Technical Lead
@@ -109,11 +109,11 @@ ChatGPT نقش‌های زیر را دارد:
 - Diff and Evidence Reviewer
 - Step-by-Step Technical Coach
 
-ChatGPT به‌صورت پیش‌فرض کد پروژه را به‌جای مالک نمی‌نویسد. وظیفه اصلی آن طراحی task، review خروجی، تشخیص ریسک، توضیح مرحله و نگهداری consistency معماری است.
+این نقش به‌صورت پیش‌فرض کد پروژه را به‌جای مالک نمی‌نویسد. وظیفه اصلی آن طراحی task، review خروجی، تشخیص ریسک، توضیح مرحله و نگهداری consistency معماری است.
 
-## 3.3 Codex — ابزار اصلی پیاده‌سازی
+## 3.3 نقش اصلی پیاده‌سازی
 
-**Codex ابزار اصلی اجرای تغییرات repository-level است.**
+**نقش پیاده‌سازی مسئول اجرای تغییرات repository-level است.**
 
 مناسب برای:
 
@@ -129,9 +129,9 @@ ChatGPT به‌صورت پیش‌فرض کد پروژه را به‌جای ما�
 
 قانون:
 
-> Codex اجراکننده است، نه تصمیم‌گیر معماری.
+> پیاده‌ساز اجراکننده است، نه تصمیم‌گیر معماری.
 
-هر task Codex باید دارای موارد زیر باشد:
+هر task پیاده‌سازی باید دارای موارد زیر باشد:
 
 - هدف محدود؛
 - in-scope و out-of-scope؛
@@ -142,9 +142,9 @@ ChatGPT به‌صورت پیش‌فرض کد پروژه را به‌جای ما�
 - rollback instructions؛
 - evidence requirements.
 
-## 3.4 Cursor با Claude — IDE و بازبین تعاملی
+## 3.4 نقش بازبینی تعاملی
 
-Cursor برای این موارد استفاده می‌شود:
+بازبینی تعاملی برای این موارد استفاده می‌شود:
 
 - مرور سریع repository؛
 - فهم ارتباط فایل‌ها؛
@@ -156,24 +156,21 @@ Cursor برای این موارد استفاده می‌شود:
 - اصلاحات بسیار کوچک و فوری؛
 - توضیح کد و tests.
 
-Cursor مسئول ساخت خودمختار یک Phase کامل نیست.
+بازبین مسئول ساخت خودمختار یک Phase کامل نیست.
 
-## 3.5 Claude Code واقعی — تست runtime مخصوص Claude Code
+## 3.5 اعتبارسنجی امنیت محیط توسعه
 
-استفاده از Claude داخل Cursor برابر با Claude Code runtime نیست.
+در یک محیط توسعه کنترل‌شده باید این موارد آزمایش شوند:
 
-فقط در Claude Code واقعی باید این موارد آزمایش شوند:
-
-- `.claude/settings.json`
 - permission modes
-- PreToolUse/PostToolUse hooks
+- pre-execution/post-execution hooks
 - managed settings
 - sandbox
 - filesystem/network restrictions
-- MCP tool names and schemas
-- custom agents
+- runtime tool names and schemas
+- custom automation
 - skills
-- `bypassPermissions` posture
+- permission-bypass posture
 - hook failure behaviour
 
 محیط ترجیحی برای این تست:
@@ -182,21 +179,21 @@ Cursor مسئول ساخت خودمختار یک Phase کامل نیست.
 - Linux container/VM؛
 - نه اتکای صرف به native Windows برای security boundary.
 
-## 3.6 Workflow رسمی ابزارها
+## 3.6 Workflow رسمی مهندسی
 
 | فعالیت | ابزار اصلی |
 |---|---|
-| معماری و task design | ChatGPT + مالک پروژه |
-| پیاده‌سازی repository | Codex |
-| تست و evidence | Codex |
-| manual diff review | Cursor + مالک |
-| adversarial review | Cursor/Claude یا Codex task مستقل |
-| رفع review | Codex |
-| Claude-specific security test | Claude Code در WSL2/Linux |
+| معماری و task design | نقش معماری + مالک پروژه |
+| پیاده‌سازی repository | نقش پیاده‌سازی |
+| تست و evidence | نقش پیاده‌سازی |
+| manual diff review | بازبین مستقل + مالک |
+| adversarial review | بازبین مستقل |
+| رفع review | نقش پیاده‌سازی |
+| security test محیط توسعه | محیط کنترل‌شده WSL2/Linux |
 | merge approval | مالک پروژه |
 | legal approval | انسان/وکیل واجد صلاحیت |
 
-دو Agent نباید هم‌زمان روی branch و فایل‌های مشترک write access داشته باشند.
+دو مشارکت‌کننده نباید هم‌زمان روی branch و فایل‌های مشترک write access داشته باشند.
 
 ---
 
@@ -205,15 +202,15 @@ Cursor مسئول ساخت خودمختار یک Phase کامل نیست.
 فایل اصلی governance باید دقیقاً در root پروژه با نام زیر قرار بگیرد:
 
 ```text
-CLAUDE.md
+PROJECT_GOVERNANCE.md
 ```
 
 فایل‌هایی مانند موارد زیر root constitution محسوب نمی‌شوند:
 
 ```text
-CLAUDE.reviewed.md
-CLAUDE_v3.md
-CLAUDE-final-copy.md
+PROJECT_GOVERNANCE.reviewed.md
+PROJECT_GOVERNANCE_v3.md
+PROJECT_GOVERNANCE-final-copy.md
 ```
 
 نسخه‌های قبلی فقط در archive نگهداری شوند:
@@ -484,8 +481,8 @@ Later:
 
 ```text
 australian-legal-ai/
-├── AGENTS.md
-├── CLAUDE.md
+├── ENGINEERING_WORKFLOW.md
+├── PROJECT_GOVERNANCE.md
 ├── README.md
 ├── SECURITY.md
 ├── CONTRIBUTING.md
@@ -496,17 +493,6 @@ australian-legal-ai/
 ├── .env.example
 ├── .gitignore
 ├── .pre-commit-config.yaml
-│
-├── .cursor/
-│   ├── rules/
-│   └── commands/
-│
-├── .claude/
-│   ├── settings.json
-│   ├── hooks/
-│   ├── agents/
-│   ├── rules/
-│   └── skills/
 │
 ├── apps/
 │   ├── api/
@@ -1294,7 +1280,7 @@ Artifact provenance:
 
 ---
 
-# 25. Claude Code Enforcement
+# 25. Development Environment Security Validation
 
 ترتیب اتکا:
 
@@ -1308,11 +1294,11 @@ Managed settings
 
 قواعد:
 
-- `bypassPermissions` برای production غیرفعال؛
-- نام MCP tool فرضی ساخته نشود؛
+- bypass modes برای production غیرفعال؛
+- نام runtime tool فرضی ساخته نشود؛
 - real tool names در deployment enumerate شوند؛
 - هر deny rule negative-tested شود؛
-- file-tool deny به‌تنهایی Bash را محدود نمی‌کند؛
+- file-tool deny به‌تنهایی shell را محدود نمی‌کند؛
 - network allowlist در OS/sandbox؛
 - critical control فقط remote HTTP hook نباشد؛
 - absence of required control باعث fail-closed شود.
@@ -1442,8 +1428,8 @@ shell(command: string)
 
 Material changes requiring gate:
 
-- CLAUDE.md
-- AGENTS.md
+- PROJECT_GOVERNANCE.md
+- ENGINEERING_WORKFLOW.md
 - rules
 - skills
 - workflows
@@ -1451,7 +1437,7 @@ Material changes requiring gate:
 - tools
 - models
 - source parsers
-- MCP servers
+- runtime tool servers
 - hooks
 - permissions
 - data schemas
@@ -1552,10 +1538,10 @@ Exit criteria:
 
 Deliverables:
 
-- approved root `CLAUDE.md`
-- `AGENTS.md`
-- Cursor rules
-- initial Claude settings skeleton
+- approved root `PROJECT_GOVERNANCE.md`
+- `ENGINEERING_WORKFLOW.md`
+- repository workflow rules
+- initial development-environment settings skeleton
 - policy documents
 - L/R schemas
 - approval schema
@@ -1765,14 +1751,14 @@ Deliverables:
 
 برای هر task:
 
-1. task brief توسط ChatGPT؛
+1. task brief توسط نقش معماری؛
 2. branch/worktree جدید؛
-3. Codex prompt محدود؛
-4. Codex implementation and tests؛
+3. دستور کار محدود؛
+4. implementation and tests؛
 5. inspect terminal evidence؛
-6. Cursor manual review بدون edit؛
+6. independent manual review بدون edit؛
 7. review findings ثبت شود؛
-8. Codex فقط findings را اصلاح کند؛
+8. پیاده‌ساز فقط findings را اصلاح کند؛
 9. full test suite؛
 10. final diff review؛
 11. commit؛
@@ -1801,14 +1787,14 @@ docs(adr): record policy-engine decision
 
 ---
 
-# 31. Prompt Template for Codex
+# 31. Bounded Implementation Task Template
 
 ```text
 Task: <short title>
 
 Read first:
-- AGENTS.md
-- CLAUDE.md
+- ENGINEERING_WORKFLOW.md
+- PROJECT_GOVERNANCE.md
 - <relevant ADRs/policies>
 
 Goal:
@@ -1855,14 +1841,14 @@ Stop conditions:
 
 ---
 
-# 32. Prompt Template for Cursor Review
+# 32. Independent Review Template
 
 ```text
 Review only. Do not edit files.
 
 Read:
-- CLAUDE.md
-- AGENTS.md
+- PROJECT_GOVERNANCE.md
+- ENGINEERING_WORKFLOW.md
 - relevant policy/workflow
 - current diff
 
@@ -1888,7 +1874,7 @@ Report:
 
 ---
 
-# 33. Claude Code Security Validation Template
+# 33. Development Environment Security Validation Template
 
 ```text
 Environment: WSL2/Linux
@@ -1900,15 +1886,15 @@ Validate:
 2. bypass disabled;
 3. .env blocked through Read and shell;
 4. network allowlist;
-5. PreToolUse critical blocking;
+5. critical pre-execution blocking;
 6. hook absence detection;
-7. MCP tool names match deployed schema;
+7. runtime tool names match deployed schema;
 8. privileged egress blocked;
 9. L5/L6 attempts blocked;
 10. audit failure causes fail-closed.
 
 Record:
-- Claude Code version
+- development environment version
 - OS
 - settings scope
 - exact command
@@ -1933,7 +1919,7 @@ Record:
 - matter isolation principle
 - memory separation
 - skill quarantine
-- Codex/Cursor/Claude Code role split
+- role-neutral engineering workflow
 - official-source-first approach
 - hybrid retrieval direction
 - phased delivery
@@ -1951,7 +1937,7 @@ Record:
 
 - repository rebuilt by owner from zero
 - final Git history
-- actual managed Claude settings
+- actual managed development-environment settings
 - tested hooks
 - identity provider
 - approval persistence
@@ -1979,8 +1965,6 @@ Run and record:
 
 ```powershell
 git --version
-cursor --version
-codex --version
 uv --version
 uv python list
 python --version
@@ -2004,7 +1988,6 @@ Set-Location australian-legal-ai
 git init
 git branch -M main
 git status
-cursor .
 ```
 
 Do not copy prior ZIP contents.
@@ -2013,8 +1996,8 @@ Do not copy prior ZIP contents.
 
 First commit will contain only:
 
-- `CLAUDE.md`
-- `AGENTS.md`
+- `PROJECT_GOVERNANCE.md`
+- `ENGINEERING_WORKFLOW.md`
 - `README.md`
 - this Master Blueprint
 - `.gitignore`
@@ -2027,7 +2010,7 @@ No FastAPI، Next.js، database، Agent یا network integration yet.
 
 Actions:
 
-- rename reviewed constitution to `CLAUDE.md`
+- rename reviewed constitution to `PROJECT_GOVERNANCE.md`
 - place at repository root
 - archive previous versions
 - review contradiction checklist
@@ -2038,9 +2021,9 @@ Actions:
 governance-v1.0.0
 ```
 
-## Step 4 — Codex Phase 0 Task
+## Step 4 — Phase 0 Implementation Task
 
-Codex task:
+Implementation task:
 
 - create engineering foundation only؛
 - package management؛
@@ -2051,9 +2034,9 @@ Codex task:
 - no external services؛
 - no model calls.
 
-## Step 5 — Cursor Review
+## Step 5 — Independent Review
 
-Cursor reviews:
+Independent review covers:
 
 - dependency choices
 - scripts
@@ -2103,9 +2086,9 @@ Only after:
 
 | Decision | Current choice | Status |
 |---|---|---|
-| Primary implementation agent | Codex | Approved |
-| Daily IDE/review | Cursor + Claude | Approved |
-| Claude runtime test | Claude Code in WSL2/Linux | Approved |
+| Primary implementation role | Bounded repository implementation | Approved |
+| Daily review | Independent diff review | Approved |
+| Development-environment security test | Controlled WSL2/Linux environment | Approved |
 | Backend language | Python | Approved |
 | Backend framework | FastAPI, when Phase requires it | Provisional-approved |
 | Frontend | Next.js + TypeScript | Provisional-approved |
@@ -2167,32 +2150,19 @@ Only after:
 
 # 40. Source References
 
-1. OpenAI Codex product and engineering guidance:
-   - https://openai.com/codex/
-   - https://openai.com/business/solutions/engineering/
-   - https://openai.com/index/harness-engineering/
-
-2. Cursor official rules and CLI guidance:
-   - https://docs.cursor.com/context/rules-for-ai
-   - https://docs.cursor.com/en/cli/using
-
-3. Anthropic Claude Code official setup and CLI:
-   - https://docs.anthropic.com/en/docs/claude-code/getting-started
-   - https://docs.anthropic.com/en/docs/claude-code/cli-usage
-
-4. Federal Court of Australia GPN-AI:
+1. Federal Court of Australia GPN-AI:
    - https://www.fedcourt.gov.au/law-and-practice/practice-documents/practice-notes/gpn-ai
 
-5. OAIC guidance:
+2. OAIC guidance:
    - https://www.oaic.gov.au/privacy/privacy-guidance-for-organisations-and-government-agencies/guidance-on-privacy-and-the-use-of-commercially-available-ai-products
 
-6. Legal Practice Board of Western Australia:
+3. Legal Practice Board of Western Australia:
    - https://www.lpbwa.org.au/artificial-intelligence-joint-statement
 
-7. Federal Register of Legislation API:
+4. Federal Register of Legislation API:
    - https://www.legislation.gov.au/help-and-resources/using-the-legislation-register/data-share-and-reuse
 
-8. Western Australian Legislation notification feeds:
+5. Western Australian Legislation notification feeds:
    - https://www.legislation.wa.gov.au/legislation/statutes.nsf/feeds.html
 
 ---
@@ -2205,7 +2175,7 @@ Only after:
 
 هیچ تصمیم معماری مهمی فقط در chat باقی نمی‌ماند. تصمیم‌ها در این سند یا در ADR ثبت می‌شوند.
 
-هیچ Agentی بدون task محدود و acceptance criteria روی repository رها نمی‌شود.
+هیچ مشارکت‌کننده‌ای بدون task محدود و acceptance criteria روی repository کار نمی‌کند.
 
 هیچ پاسخ حقوقی بدون verified source و pinpoint قابل اتکا نیست.
 
