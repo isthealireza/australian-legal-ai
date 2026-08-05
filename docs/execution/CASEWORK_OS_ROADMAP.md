@@ -77,8 +77,7 @@ ledger, ADR index, `MVP_ROADMAP.md` §11A.
 
 ### Phase 1 — Generic matter core
 
-**Status:** Approved to plan; Not Started. Requires a separate bounded Phase 1
-plan before any product-code changes.
+**Status:** Completed.
 **Scope:** typed matter, party, fact, issue, risk, case-type models; PostgreSQL
 schema and migrations; deterministic state machine; matter-isolated
 repositories; audit-event foundation; unit and integration tests.
@@ -96,6 +95,7 @@ paths that require it; no L3+ surfaces.
 
 ### Phase 2 — Playbook registry and WA motor playbook
 
+**Status:** Completed.
 **Scope:** versioned playbook interface; registry; supported/unsupported
 routing; `wa_motor_property_damage_v1`; mandatory intake; disqualifiers
 including injury and court proceedings; evidence checklist; state-transition
@@ -110,6 +110,8 @@ rules; action policy; synthetic evaluation cases.
 
 ### Phase 3 — Evidence vault extension
 
+**Status:** Not Started; separately gated. An accepted architecture decision
+and a bounded implementation task are required before implementation.
 **Scope:** matter-scoped evidence records; original/derived relationships; safe
 upload boundary; immutable storage reuse; provenance; checklist integration;
 synthetic image/video metadata fixtures; negative security tests.
