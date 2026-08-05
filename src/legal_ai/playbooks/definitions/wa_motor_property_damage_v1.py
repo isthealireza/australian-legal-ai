@@ -59,6 +59,7 @@ def wa_motor_property_damage_v1_definition() -> dict[str, Any]:
                         CaseType.UNASSIGNED.value,
                     ],
                 },
+                _flag_true("flags.parked_or_unattended"),
             ],
         },
         "intake_questions": [
@@ -80,6 +81,13 @@ def wa_motor_property_damage_v1_definition() -> dict[str, Any]:
                 "question_id": "subject_vehicle",
                 "prompt": "Describe the subject vehicle as reported.",
                 "value_type": IntakeValueType.TEXT.value,
+                "required": True,
+                "enum_codes": [],
+            },
+            {
+                "question_id": "parked_or_unattended",
+                "prompt": "Was the subject vehicle parked or unattended?",
+                "value_type": IntakeValueType.BOOLEAN.value,
                 "required": True,
                 "enum_codes": [],
             },
@@ -119,7 +127,12 @@ def wa_motor_property_damage_v1_definition() -> dict[str, Any]:
                 "enum_codes": [],
             },
         ],
-        "required_fields": ["incident_datetime", "incident_location", "subject_vehicle"],
+        "required_fields": [
+            "incident_datetime",
+            "incident_location",
+            "subject_vehicle",
+            "parked_or_unattended",
+        ],
         "disqualifiers": [
             {
                 "disqualifier_id": "injury_suspected",

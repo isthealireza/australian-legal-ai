@@ -424,7 +424,6 @@ class RecordBlockingDisqualifierCommand(BaseModel):
     source_channel: str = Field(min_length=1, max_length=64)
     disqualifier_id: str = Field(min_length=1, max_length=64)
     outcome_code: EvaluationOutcome = EvaluationOutcome.BLOCKING_DISQUALIFIER_WHILE_PINNED
-    target_status: MatterStatus | None = None
     facts: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = Field(default=None, max_length=512)
     correlation_id: UUID | None = None

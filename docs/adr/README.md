@@ -9,3 +9,4 @@ Sprint 1.3B1 adds: [0006 Deterministic federal legislation hierarchy recognition
 Sprint 1.3B2A adds: [0007 Deterministic subsection and Schedule subclause recognition](0007-deterministic-subsection-recognition.md).
 Sprint 1.3B2B1 adds: [0008 Deterministic unambiguous paragraph recognition](0008-deterministic-unambiguous-paragraph-recognition.md).
 Phase 0 accepts: [0009 Casework OS product pivot and first operational vertical](0009-casework-os-product-pivot.md).
+Phase 2 accepts: [0010 Phase 2 playbook framework](0010-phase-2-playbook-framework.md).

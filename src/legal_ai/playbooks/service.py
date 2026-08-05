@@ -28,6 +28,7 @@ from legal_ai.playbooks.errors import (
     GroundingValidationFailed,
     PlaybookAssignmentError,
     PlaybookAuditWriteFailed,
+    PlaybookAuthorityDenied,
     PlaybookValidationError,
     SeedHashConflictError,
     TransitionRequiredError,
@@ -39,6 +40,7 @@ from legal_ai.playbooks.models import (
     AssignPlaybookCommand,
     ChecklistStateRecord,
     CreateDraftCommand,
+    DisqualifierRule,
     IntakeAnswerRecord,
     MarkUnsupportedCommand,
     PlaybookDefinitionPayload,
@@ -57,6 +59,7 @@ from legal_ai.playbooks.repository import PlaybookRepository
 from legal_ai.playbooks.rules import evaluate_rule, parse_rule_node
 from legal_ai.playbooks.types import (
     PLAYBOOK_SCHEMA_VERSION,
+    DisqualifierOutcome,
     EvaluationOutcome,
     EvaluationReason,
     IntakeValueType,
@@ -356,6 +359,21 @@ class PlaybookService:
         return matches
 
     def assign_playbook(self, command: AssignPlaybookCommand) -> MatterRecord:
+        try:
+            return self._assign_playbook(command)
+        except (PlaybookAssignmentError, PlaybookAuthorityDenied) as denied:
+            self._record_policy_denied(
+                command_type="AssignPlaybook",
+                matter_id=command.matter_id,
+                actor=command.actor,
+                source_channel=command.source_channel,
+                correlation_id=command.correlation_id,
+                error=denied,
+                playbook_version_id=command.playbook_version_id,
+            )
+            raise
+
+    def _assign_playbook(self, command: AssignPlaybookCommand) -> MatterRecord:
         with self._casework.transaction() as connection:
             matter = self._require_open_matter(connection, command.matter_id)
             if matter.row_version != command.row_version:
@@ -369,6 +387,27 @@ class PlaybookService:
                 facts=command.facts,
                 command_type="AssignPlaybook",
             )
+            matched_disqualifier = self._matching_disqualifier(
+                definition=definition,
+                matter=matter,
+                facts=command.facts,
+            )
+            if matched_disqualifier is not None:
+                if matched_disqualifier.outcome is not DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY:
+                    raise PlaybookAssignmentError(
+                        "AssignPlaybook blocked by disqualifier "
+                        f"{matched_disqualifier.disqualifier_id}"
+                    )
+                return self._route_disqualifier(
+                    connection,
+                    matter=matter,
+                    version=version,
+                    disqualifier=matched_disqualifier,
+                    command_type="AssignPlaybook",
+                    actor=command.actor,
+                    source_channel=command.source_channel,
+                    correlation_id=command.correlation_id,
+                )
             primary_case_type = definition.supported_case_types[0]
             now = datetime.now(UTC)
             updated = self._casework.update_matter_pin(
@@ -591,6 +630,20 @@ class PlaybookService:
             ) from invalid_transition
 
     def mark_unsupported(self, command: MarkUnsupportedCommand) -> MatterRecord:
+        try:
+            return self._mark_unsupported(command)
+        except (PlaybookAssignmentError, PlaybookAuthorityDenied) as denied:
+            self._record_policy_denied(
+                command_type="MarkUnsupported",
+                matter_id=command.matter_id,
+                actor=command.actor,
+                source_channel=command.source_channel,
+                correlation_id=command.correlation_id,
+                error=denied,
+            )
+            raise
+
+    def _mark_unsupported(self, command: MarkUnsupportedCommand) -> MatterRecord:
         with self._casework.transaction() as connection:
             matter = self._require_open_matter(connection, command.matter_id)
             if matter.assigned_playbook_version_id is not None:
@@ -601,12 +654,20 @@ class PlaybookService:
                 raise ConcurrencyConflictError(
                     f"matter {command.matter_id} row_version conflict at {command.row_version}"
                 )
+            target_status = MatterStatus.RESEARCH_AND_DRAFT_ONLY
+            assert_transition_allowed(
+                current=matter.status,
+                target=target_status,
+                case_type=CaseType.UNSUPPORTED,
+                reopen=False,
+            )
             updated = self._casework.update_matter_optimistic(
                 connection,
                 matter_id=command.matter_id,
                 expected_row_version=command.row_version,
                 values={
                     "case_type": CaseType.UNSUPPORTED.value,
+                    "status": target_status.value,
                     "updated_by": command.actor,
                 },
             )
@@ -623,6 +684,8 @@ class PlaybookService:
                 source_channel=command.source_channel,
                 metadata={
                     "command_type": "MarkUnsupported",
+                    "from_status": matter.status.value,
+                    "to_status": target_status.value,
                     "row_version": updated.row_version,
                 },
             )
@@ -638,6 +701,27 @@ class PlaybookService:
 
         if failure_inject is not None and failure_inject not in _FAILURE_INJECT_POINTS:
             raise PlaybookValidationError(f"unknown failure_inject point: {failure_inject}")
+
+        try:
+            return self._upgrade_playbook(command, failure_inject=failure_inject)
+        except (PlaybookAssignmentError, PlaybookAuthorityDenied) as denied:
+            self._record_policy_denied(
+                command_type="UpgradePlaybook",
+                matter_id=command.matter_id,
+                actor=command.actor,
+                source_channel=command.source_channel,
+                correlation_id=command.correlation_id,
+                error=denied,
+                playbook_version_id=command.target_playbook_version_id,
+            )
+            raise
+
+    def _upgrade_playbook(
+        self,
+        command: UpgradePlaybookCommand,
+        *,
+        failure_inject: str | None,
+    ) -> MatterRecord:
 
         with self._casework.transaction() as connection:
             # 1. Lock matter; verify row_version
@@ -672,7 +756,27 @@ class PlaybookService:
                 facts=command.facts,
                 command_type="UpgradePlaybook",
             )
-            del definition  # validated
+            matched_disqualifier = self._matching_disqualifier(
+                definition=definition,
+                matter=matter,
+                facts=command.facts,
+            )
+            if matched_disqualifier is not None:
+                if matched_disqualifier.outcome is not DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY:
+                    raise PlaybookAssignmentError(
+                        "UpgradePlaybook blocked by disqualifier "
+                        f"{matched_disqualifier.disqualifier_id}"
+                    )
+                return self._route_disqualifier(
+                    connection,
+                    matter=matter,
+                    version=target,
+                    disqualifier=matched_disqualifier,
+                    command_type="UpgradePlaybook",
+                    actor=command.actor,
+                    source_channel=command.source_channel,
+                    correlation_id=command.correlation_id,
+                )
 
             now = datetime.now(UTC)
             correlation_id = command.correlation_id or uuid4()
@@ -761,6 +865,23 @@ class PlaybookService:
         self,
         command: RecordBlockingDisqualifierCommand,
     ) -> MatterRecord:
+        try:
+            return self._record_blocking_disqualifier(command)
+        except (PlaybookAssignmentError, PlaybookAuthorityDenied) as denied:
+            self._record_policy_denied(
+                command_type="RecordBlockingDisqualifier",
+                matter_id=command.matter_id,
+                actor=command.actor,
+                source_channel=command.source_channel,
+                correlation_id=command.correlation_id,
+                error=denied,
+            )
+            raise
+
+    def _record_blocking_disqualifier(
+        self,
+        command: RecordBlockingDisqualifierCommand,
+    ) -> MatterRecord:
         with self._casework.transaction() as connection:
             matter = self._require_open_matter(connection, command.matter_id)
             if matter.assigned_playbook_version_id is None:
@@ -772,12 +893,39 @@ class PlaybookService:
                     f"matter {command.matter_id} row_version conflict at {command.row_version}"
                 )
             pin = self._playbooks.require_version(connection, matter.assigned_playbook_version_id)
+            definition = validate_definition_payload(pin.definition_json)
+            disqualifier = next(
+                (
+                    item
+                    for item in definition.disqualifiers
+                    if item.disqualifier_id == command.disqualifier_id
+                ),
+                None,
+            )
+            if disqualifier is None:
+                raise PlaybookAssignmentError(
+                    f"disqualifier_id not in pinned definition: {command.disqualifier_id}"
+                )
+            disqualifier_result = evaluate_rule(
+                parse_rule_node(disqualifier.rule),
+                self._trusted_matter_facts(matter=matter, facts=command.facts),
+            )
+            if disqualifier_result is not RuleResult.MATCH:
+                raise PlaybookAssignmentError(
+                    "pinned disqualifier requires MATCH, got "
+                    f"{disqualifier_result.value}: {command.disqualifier_id}"
+                )
             now = datetime.now(UTC)
             updated = matter
-            if command.target_status is not None and command.target_status is not matter.status:
+            target_status = (
+                MatterStatus.RESEARCH_AND_DRAFT_ONLY
+                if disqualifier.outcome is DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY
+                else None
+            )
+            if target_status is not None and target_status is not matter.status:
                 assert_transition_allowed(
                     current=matter.status,
-                    target=command.target_status,
+                    target=target_status,
                     case_type=matter.case_type,
                     reopen=False,
                 )
@@ -786,7 +934,7 @@ class PlaybookService:
                     matter_id=command.matter_id,
                     expected_row_version=command.row_version,
                     values={
-                        "status": command.target_status.value,
+                        "status": target_status.value,
                         "updated_by": command.actor,
                     },
                 )
@@ -810,7 +958,7 @@ class PlaybookService:
                 event_id=uuid4(),
                 matter_id=command.matter_id,
                 actor=command.actor,
-                event_type=AuditEventType.PLAYBOOK_BLOCKING_DISQUALIFIER,
+                event_type=AuditEventType.ACTION_DENIED,
                 entity_type="playbook_version",
                 entity_id=pin.playbook_version_id,
                 correlation_id=command.correlation_id,
@@ -818,16 +966,34 @@ class PlaybookService:
                 source_channel=command.source_channel,
                 metadata={
                     "command_type": "RecordBlockingDisqualifier",
+                    "playbook_key": pin.playbook_key,
                     "playbook_version_id": str(pin.playbook_version_id),
+                    "playbook_version": pin.version,
                     "reason_code": command.disqualifier_id,
                     "outcome_code": command.outcome_code.value,
                     "evaluation_id": str(evaluation_id),
+                    "from_status": matter.status.value,
+                    **({"to_status": target_status.value} if target_status is not None else {}),
                     "row_version": updated.row_version,
                 },
             )
             return updated
 
     def upsert_intake_answer(self, command: UpsertIntakeAnswerCommand) -> IntakeAnswerRecord:
+        try:
+            return self._upsert_intake_answer(command)
+        except (PlaybookAssignmentError, PlaybookAuthorityDenied) as denied:
+            self._record_policy_denied(
+                command_type="UpsertIntakeAnswer",
+                matter_id=command.matter_id,
+                actor=command.actor,
+                source_channel=command.source_channel,
+                correlation_id=command.correlation_id,
+                error=denied,
+            )
+            raise
+
+    def _upsert_intake_answer(self, command: UpsertIntakeAnswerCommand) -> IntakeAnswerRecord:
         with self._casework.transaction() as connection:
             matter = self._require_open_matter(connection, command.matter_id)
             if matter.assigned_playbook_version_id is None:
@@ -888,6 +1054,23 @@ class PlaybookService:
             return answer
 
     def upsert_checklist_state(
+        self,
+        command: UpsertChecklistStateCommand,
+    ) -> ChecklistStateRecord:
+        try:
+            return self._upsert_checklist_state(command)
+        except (PlaybookAssignmentError, PlaybookAuthorityDenied) as denied:
+            self._record_policy_denied(
+                command_type="UpsertChecklistState",
+                matter_id=command.matter_id,
+                actor=command.actor,
+                source_channel=command.source_channel,
+                correlation_id=command.correlation_id,
+                error=denied,
+            )
+            raise
+
+    def _upsert_checklist_state(
         self,
         command: UpsertChecklistStateCommand,
     ) -> ChecklistStateRecord:
@@ -974,23 +1157,117 @@ class PlaybookService:
             CaseType.SUPPORTED_PENDING_PLAYBOOK,
         }:
             raise PlaybookAssignmentError("matter case_type incompatible with playbook")
-        merged = dict(facts)
-        merged.setdefault("matter.jurisdiction", matter.jurisdiction.value)
-        merged.setdefault("matter.case_type", matter.case_type.value)
-        merged.setdefault("matter.status", matter.status.value)
-        merged.setdefault("matter.risk_level", matter.risk_level.value)
+        merged = self._trusted_matter_facts(matter=matter, facts=facts)
         eligibility = evaluate_rule(definition.eligibility_rule(), merged)
         if eligibility is not RuleResult.MATCH:
             raise PlaybookAssignmentError(
                 f"{command_type} requires eligibility MATCH, got {eligibility.value}"
             )
+        return definition
+
+    @staticmethod
+    def _matching_disqualifier(
+        *,
+        definition: PlaybookDefinitionPayload,
+        matter: MatterRecord,
+        facts: dict[str, Any],
+    ) -> DisqualifierRule | None:
+        merged = PlaybookService._trusted_matter_facts(matter=matter, facts=facts)
         for disqualifier in definition.disqualifiers:
             result = evaluate_rule(parse_rule_node(disqualifier.rule), merged)
             if result is RuleResult.MATCH:
-                raise PlaybookAssignmentError(
-                    f"{command_type} blocked by disqualifier {disqualifier.disqualifier_id}"
-                )
-        return definition
+                return disqualifier
+        return None
+
+    @staticmethod
+    def _trusted_matter_facts(
+        *,
+        matter: MatterRecord,
+        facts: dict[str, Any],
+    ) -> dict[str, Any]:
+        merged = dict(facts)
+        merged.update(
+            {
+                "matter.jurisdiction": matter.jurisdiction.value,
+                "matter.case_type": matter.case_type.value,
+                "matter.status": matter.status.value,
+                "matter.risk_level": matter.risk_level.value,
+            }
+        )
+        return merged
+
+    def _route_disqualifier(
+        self,
+        connection: Connection,
+        *,
+        matter: MatterRecord,
+        version: PlaybookVersionRecord,
+        disqualifier: DisqualifierRule,
+        command_type: str,
+        actor: str,
+        source_channel: str,
+        correlation_id: UUID | None,
+    ) -> MatterRecord:
+        target_status = MatterStatus.RESEARCH_AND_DRAFT_ONLY
+        assert_transition_allowed(
+            current=matter.status,
+            target=target_status,
+            case_type=matter.case_type,
+            reopen=False,
+        )
+        now = datetime.now(UTC)
+        updated = self._casework.update_matter_optimistic(
+            connection,
+            matter_id=matter.matter_id,
+            expected_row_version=matter.row_version,
+            values={
+                "status": target_status.value,
+                "updated_by": actor,
+            },
+        )
+        evaluation_id = uuid4()
+        self._playbooks.insert_evaluation(
+            connection,
+            evaluation_id=evaluation_id,
+            matter_id=matter.matter_id,
+            occurred_at=now,
+            actor=actor,
+            outcome_code=EvaluationOutcome.BLOCKING_DISQUALIFIER,
+            reason_code=EvaluationReason.DISQUALIFIER_MATCHED,
+            selected_playbook_version_id=version.playbook_version_id,
+            matter_row_version_observed=matter.row_version,
+            notes=None,
+            correlation_id=correlation_id,
+            candidates=[(version.playbook_version_id, 1, RuleResult.MATCH)],
+        )
+        metadata: dict[str, object] = {
+            "command_type": command_type,
+            "playbook_key": version.playbook_key,
+            "playbook_version_id": str(version.playbook_version_id),
+            "playbook_version": version.version,
+            "from_status": matter.status.value,
+            "to_status": target_status.value,
+            "outcome_code": EvaluationOutcome.BLOCKING_DISQUALIFIER.value,
+            "reason_code": EvaluationReason.DISQUALIFIER_MATCHED.value,
+            "evaluation_id": str(evaluation_id),
+            "row_version": updated.row_version,
+        }
+        if matter.assigned_playbook_version_id is not None:
+            metadata["from_playbook_version_id"] = str(matter.assigned_playbook_version_id)
+        self._append_casework_audit(
+            connection,
+            event_id=uuid4(),
+            matter_id=matter.matter_id,
+            actor=actor,
+            event_type=AuditEventType.ACTION_DENIED,
+            entity_type="playbook_version",
+            entity_id=version.playbook_version_id,
+            correlation_id=correlation_id,
+            reason=disqualifier.disqualifier_id,
+            source_channel=source_channel,
+            metadata=metadata,
+        )
+        return updated
 
     def _assert_pinned_ops_allowed(
         self,
@@ -1085,6 +1362,59 @@ class PlaybookService:
                 )
         except Exception:
             raise PlaybookAuditWriteFailed("activation denied audit insert failed") from error
+
+    def _record_policy_denied(
+        self,
+        *,
+        command_type: str,
+        matter_id: UUID,
+        actor: str,
+        source_channel: str,
+        correlation_id: UUID | None,
+        error: Exception,
+        playbook_version_id: UUID | None = None,
+    ) -> None:
+        try:
+            with self._casework.independent_transaction() as connection:
+                matter = self._casework.require_matter(connection, matter_id)
+                relevant_version_id = playbook_version_id or matter.assigned_playbook_version_id
+                version = (
+                    self._playbooks.require_version(connection, relevant_version_id)
+                    if relevant_version_id is not None
+                    else None
+                )
+                metadata: dict[str, object] = {
+                    "command_type": command_type,
+                    "reason_code": type(error).__name__,
+                    "row_version": matter.row_version,
+                }
+                if version is not None:
+                    metadata.update(
+                        {
+                            "playbook_key": version.playbook_key,
+                            "playbook_version_id": str(version.playbook_version_id),
+                            "playbook_version": version.version,
+                        }
+                    )
+                if matter.assigned_playbook_version_id is not None:
+                    metadata["from_playbook_version_id"] = str(matter.assigned_playbook_version_id)
+                self._append_casework_audit(
+                    connection,
+                    event_id=uuid4(),
+                    matter_id=matter_id,
+                    actor=actor,
+                    event_type=AuditEventType.ACTION_DENIED,
+                    entity_type="playbook_version" if version is not None else "matter",
+                    entity_id=version.playbook_version_id if version is not None else matter_id,
+                    correlation_id=correlation_id,
+                    reason=str(error)[:2000],
+                    source_channel=source_channel,
+                    metadata=metadata,
+                )
+        except Exception:
+            raise PlaybookAuditWriteFailed(
+                f"policy denial audit insert failed for {command_type}"
+            ) from error
 
     def _append_playbook_audit(
         self,

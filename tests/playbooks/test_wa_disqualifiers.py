@@ -112,6 +112,7 @@ def test_wa_eligibility_match_for_supported_case_types(
             {
                 "matter.jurisdiction": "AU-WA",
                 "matter.case_type": "MOTOR_VEHICLE_PROPERTY_DAMAGE",
+                "flags.parked_or_unattended": True,
             },
         )
         is RuleResult.MATCH
@@ -119,16 +120,45 @@ def test_wa_eligibility_match_for_supported_case_types(
     assert (
         evaluate_rule(
             eligibility,
-            {"matter.jurisdiction": "AU-WA", "matter.case_type": "UNASSIGNED"},
+            {
+                "matter.jurisdiction": "AU-WA",
+                "matter.case_type": "UNASSIGNED",
+                "flags.parked_or_unattended": True,
+            },
         )
         is RuleResult.MATCH
     )
     assert (
         evaluate_rule(
             eligibility,
-            {"matter.jurisdiction": "AU-NSW", "matter.case_type": "UNASSIGNED"},
+            {
+                "matter.jurisdiction": "AU-NSW",
+                "matter.case_type": "UNASSIGNED",
+                "flags.parked_or_unattended": True,
+            },
         )
         is RuleResult.NO_MATCH
+    )
+    assert (
+        evaluate_rule(
+            eligibility,
+            {
+                "matter.jurisdiction": "AU-WA",
+                "matter.case_type": "MOTOR_VEHICLE_PROPERTY_DAMAGE",
+                "flags.parked_or_unattended": False,
+            },
+        )
+        is RuleResult.NO_MATCH
+    )
+    assert (
+        evaluate_rule(
+            eligibility,
+            {
+                "matter.jurisdiction": "AU-WA",
+                "matter.case_type": "MOTOR_VEHICLE_PROPERTY_DAMAGE",
+            },
+        )
+        is RuleResult.UNKNOWN
     )
 
 
@@ -140,6 +170,7 @@ def test_wa_description_injection_text_is_inert(wa_payload: PlaybookDefinitionPa
             {
                 "matter.jurisdiction": "AU-WA",
                 "matter.case_type": "MOTOR_VEHICLE_PROPERTY_DAMAGE",
+                "flags.parked_or_unattended": True,
             },
         )
         is RuleResult.MATCH

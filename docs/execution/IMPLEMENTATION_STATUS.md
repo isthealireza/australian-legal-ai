@@ -1,6 +1,6 @@
 # Implementation Status — Phase Ledger
 
-**Last updated:** 2026-07-28
+**Last updated:** 2026-08-04
 
 ## Phase status
 
@@ -23,11 +23,16 @@
 ## Current approved scope
 
 - ADR 0009: **Accepted** (2026-07-28)
+- ADR 0010: **Accepted** (2026-08-04); prospectively authorises the bounded
+  Phase 2 implementation for completion and merge review from that date
 - Phase 1 Generic Casework Core: **Completed** on `main`
 - Phase 2 Versioned Playbook Framework: implemented on `feat/phase-2-playbook-framework`
-- Phase 2 boundaries respected: L0–L2 only; no product playbook activation; no LLM,
-  email, OAuth, external actions, FastAPI/UI, pgvector, production deployment, real
-  client data, or L3+ execution
+- Phase 2 WA motor scope is limited to parked/unattended vehicle property
+  damage; unsupported and definition-disqualified matters fail closed to
+  `RESEARCH_AND_DRAFT_ONLY` where the pinned definition requires it
+- Phase 2 boundaries respected: L0–L2 only; no product playbook activation; no
+  LLM, email, OAuth, external actions, FastAPI/UI, pgvector, production
+  deployment, real client data, or L3+ execution
 - `wa_motor_property_damage_v1` seeded as validated **DRAFT** only
 - Phase 3: **Not Started**
 

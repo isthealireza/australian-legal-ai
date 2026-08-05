@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from typing import Any
+from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import Engine, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
 from legal_ai.casework.errors import ClosedMatterMutationError, ConcurrencyConflictError
 from legal_ai.casework.models import (
     AddPartyCommand,
     AssignRoleCommand,
+    AuditEventRecord,
     CreateMatterCommand,
     MatterRecord,
     TransitionMatterCommand,
@@ -22,6 +27,7 @@ from legal_ai.casework.repository import CaseworkRepository
 from legal_ai.casework.service import CaseworkService
 from legal_ai.casework.types import (
     ActionAuthorityLevel,
+    AuditEventType,
     CaseType,
     Jurisdiction,
     MatterStatus,
@@ -40,7 +46,9 @@ from legal_ai.playbooks.definitions.wa_motor_property_damage_v1 import (
 )
 from legal_ai.playbooks.errors import (
     GroundingUnavailable,
+    PlaybookAssignmentError,
     PlaybookAuditWriteFailed,
+    PlaybookAuthorityDenied,
     TransitionRequiredError,
 )
 from legal_ai.playbooks.grounding import FailClosedGroundingGate, GroundingActivationGate
@@ -49,7 +57,9 @@ from legal_ai.playbooks.models import (
     ApplyFallbackCommand,
     AssignPlaybookCommand,
     CreateDraftCommand,
+    MarkUnsupportedCommand,
     PlaybookVersionRecord,
+    RecordBlockingDisqualifierCommand,
     RejectAssignmentCommand,
     RetireVersionCommand,
     UpgradePlaybookCommand,
@@ -60,12 +70,14 @@ from legal_ai.playbooks.repository import PlaybookRepository
 from legal_ai.playbooks.service import PlaybookService
 from legal_ai.playbooks.types import (
     ChecklistItemStatus,
+    DisqualifierOutcome,
     EvaluationOutcome,
     EvaluationReason,
     IntakeValueType,
     OperationalClass,
     PlaybookStatus,
     RuleComparator,
+    RuleResult,
 )
 from tests.support.playbook_grounding import PermitSyntheticGroundingGate
 
@@ -321,6 +333,48 @@ def test_assign_sets_pin_and_case_type(migrated_engine: Engine) -> None:
     assert assigned.playbook_assigned_by == _ACTOR
 
 
+@pytest.mark.parametrize(
+    ("field", "trusted_value", "spoofed_value"),
+    [
+        ("matter.jurisdiction", Jurisdiction.AU_WA.value, Jurisdiction.AU_NSW.value),
+        ("matter.case_type", CaseType.UNASSIGNED.value, CaseType.UNSUPPORTED.value),
+        ("matter.status", MatterStatus.INTAKE_COMPLETE.value, MatterStatus.CLOSED.value),
+        ("matter.risk_level", RiskLevel.R1.value, RiskLevel.R4.value),
+    ],
+)
+def test_assignment_ignores_caller_overrides_of_trusted_matter_facts(
+    migrated_engine: Engine,
+    field: str,
+    trusted_value: str,
+    spoofed_value: str,
+) -> None:
+    playbooks, casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(
+        playbooks,
+        definition=_synthetic_definition(
+            eligibility={
+                "field": field,
+                "cmp": RuleComparator.EQ.value,
+                "value": trusted_value,
+            }
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+
+    assigned = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=active.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+            facts={field: spoofed_value},
+        )
+    )
+
+    assert assigned.assigned_playbook_version_id == active.playbook_version_id
+
+
 def test_wa_product_draft_cannot_activate(migrated_engine: Engine) -> None:
     definition = wa_motor_property_damage_v1_definition()
 
@@ -406,6 +460,878 @@ def test_zero_candidates_fallback_writes_evaluation_without_unsupported(
         )
     assert row["outcome_code"] == EvaluationOutcome.NO_CANDIDATES.value
     assert row["reason_code"] == EvaluationReason.NO_ACTIVE_MATCH.value
+
+
+def test_mark_unsupported_routes_atomically_from_incomplete_intake(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    matter = casework.create_matter(_create_matter_cmd())
+
+    routed = playbooks.mark_unsupported(
+        MarkUnsupportedCommand(
+            matter_id=matter.matter_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+            reason="no matching bounded playbook",
+        )
+    )
+
+    assert routed.case_type is CaseType.UNSUPPORTED
+    assert routed.status is MatterStatus.RESEARCH_AND_DRAFT_ONLY
+    assert routed.assigned_playbook_version_id is None
+    assert routed.action_authority_ceiling is ActionAuthorityLevel.L1
+    reloaded = casework.get_matter(
+        matter.matter_id,
+        actor=_ACTOR,
+        source_channel=_CHANNEL,
+    )
+    assert reloaded.case_type is CaseType.UNSUPPORTED
+    assert reloaded.status is MatterStatus.RESEARCH_AND_DRAFT_ONLY
+
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    routed_audit = next(
+        event for event in audits if event.event_type.value == "PLAYBOOK_UNSUPPORTED_MARKED"
+    )
+    assert routed_audit.actor == _ACTOR
+    assert routed_audit.matter_id == matter.matter_id
+    assert routed_audit.reason == "no matching bounded playbook"
+    assert routed_audit.metadata["from_status"] == MatterStatus.INTAKE_INCOMPLETE.value
+    assert routed_audit.metadata["to_status"] == MatterStatus.RESEARCH_AND_DRAFT_ONLY.value
+
+
+def test_assignment_disqualifier_routes_from_versioned_definition(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, playbook_repo, casework_repo = _services(migrated_engine)
+    definition = _synthetic_definition(
+        disqualifiers=[
+            {
+                "disqualifier_id": "injury_suspected",
+                "outcome": DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY.value,
+                "rule": {"field": "flags.injury_suspected", "cmp": "IS_TRUE"},
+            }
+        ]
+    )
+    active = _create_active_synthetic(playbooks, definition=definition)
+    matter = _intake_complete_matter(casework)
+
+    routed = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=active.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+            facts={"flags.injury_suspected": True},
+        )
+    )
+
+    assert routed.status is MatterStatus.RESEARCH_AND_DRAFT_ONLY
+    assert routed.assigned_playbook_version_id is None
+    assert routed.case_type is CaseType.UNASSIGNED
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    denial = next(event for event in audits if event.event_type.value == "ACTION_DENIED")
+    assert denial.actor == _ACTOR
+    assert denial.matter_id == matter.matter_id
+    assert denial.reason == "injury_suspected"
+    assert denial.metadata["command_type"] == "AssignPlaybook"
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+    assert denial.metadata["playbook_version"] == active.version
+    assert denial.metadata["from_status"] == MatterStatus.INTAKE_COMPLETE.value
+    assert denial.metadata["to_status"] == MatterStatus.RESEARCH_AND_DRAFT_ONLY.value
+    with playbook_repo.transaction() as connection:
+        evaluation = (
+            connection.execute(
+                text(
+                    "SELECT outcome_code, reason_code, selected_playbook_version_id "
+                    "FROM casework_playbook_evaluations WHERE matter_id = :mid"
+                ),
+                {"mid": matter.matter_id},
+            )
+            .mappings()
+            .one()
+        )
+    assert evaluation["outcome_code"] == EvaluationOutcome.BLOCKING_DISQUALIFIER.value
+    assert evaluation["reason_code"] == EvaluationReason.DISQUALIFIER_MATCHED.value
+    assert evaluation["selected_playbook_version_id"] == active.playbook_version_id
+
+
+def test_pinned_disqualifier_derives_research_only_route_from_definition(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    definition = _synthetic_definition(
+        disqualifiers=[
+            {
+                "disqualifier_id": "court_or_tribunal_proceeding",
+                "outcome": DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY.value,
+                "rule": {
+                    "field": "flags.court_or_tribunal_proceeding",
+                    "cmp": "IS_TRUE",
+                },
+            }
+        ]
+    )
+    active = _create_active_synthetic(playbooks, definition=definition)
+    matter = _intake_complete_matter(casework)
+    assigned = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=active.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+
+    routed = playbooks.record_blocking_disqualifier(
+        RecordBlockingDisqualifierCommand(
+            matter_id=assigned.matter_id,
+            row_version=assigned.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+            disqualifier_id="court_or_tribunal_proceeding",
+            facts={"flags.court_or_tribunal_proceeding": True},
+        )
+    )
+
+    assert routed.status is MatterStatus.RESEARCH_AND_DRAFT_ONLY
+    assert routed.assigned_playbook_version_id == active.playbook_version_id
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, assigned.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert denial.reason == "court_or_tribunal_proceeding"
+    assert denial.metadata["command_type"] == "RecordBlockingDisqualifier"
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+    assert denial.metadata["playbook_version"] == active.version
+    assert denial.metadata["from_status"] == MatterStatus.INTAKE_COMPLETE.value
+    assert denial.metadata["to_status"] == MatterStatus.RESEARCH_AND_DRAFT_ONLY.value
+
+
+def test_pinned_disqualifier_ignores_caller_override_of_trusted_matter_facts(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, _casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(
+        playbooks,
+        definition=_synthetic_definition(
+            disqualifiers=[
+                {
+                    "disqualifier_id": "closed_matter",
+                    "outcome": DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY.value,
+                    "rule": {
+                        "field": "matter.status",
+                        "cmp": RuleComparator.EQ.value,
+                        "value": MatterStatus.CLOSED.value,
+                    },
+                }
+            ]
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+    assigned = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=active.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+
+    with pytest.raises(PlaybookAssignmentError, match="requires MATCH, got NO_MATCH"):
+        playbooks.record_blocking_disqualifier(
+            RecordBlockingDisqualifierCommand(
+                matter_id=assigned.matter_id,
+                row_version=assigned.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                disqualifier_id="closed_matter",
+                facts={"matter.status": MatterStatus.CLOSED.value},
+            )
+        )
+
+    reloaded = casework.get_matter(
+        assigned.matter_id,
+        actor=_ACTOR,
+        source_channel=_CHANNEL,
+    )
+    assert reloaded.status is MatterStatus.INTAKE_COMPLETE
+    assert reloaded.row_version == assigned.row_version
+
+
+def test_incompatible_jurisdiction_refusal_is_durably_audited(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(playbooks)
+    matter = _intake_complete_matter(casework, jurisdiction=Jurisdiction.AU_NSW)
+
+    with pytest.raises(PlaybookAssignmentError, match="jurisdiction incompatible"):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    reloaded = casework.get_matter(
+        matter.matter_id,
+        actor=_ACTOR,
+        source_channel=_CHANNEL,
+    )
+    assert reloaded.status is matter.status
+    assert reloaded.case_type is matter.case_type
+    assert reloaded.row_version == matter.row_version
+    assert reloaded.assigned_playbook_version_id is None
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert denial.actor == _ACTOR
+    assert denial.matter_id == matter.matter_id
+    assert denial.reason == "matter jurisdiction incompatible with playbook"
+    assert denial.metadata["command_type"] == "AssignPlaybook"
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+    assert denial.metadata["playbook_version"] == active.version
+
+
+def test_authority_refusal_is_durably_audited(migrated_engine: Engine) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(
+        playbooks,
+        definition=_synthetic_definition(max_action_authority_level=ActionAuthorityLevel.L0.value),
+    )
+    matter = _intake_complete_matter(casework)
+
+    with pytest.raises(PlaybookAuthorityDenied):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    reloaded = casework.get_matter(matter.matter_id, actor=_ACTOR, source_channel=_CHANNEL)
+    assert reloaded.row_version == matter.row_version
+    assert reloaded.assigned_playbook_version_id is None
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert denial.reason == "AssignPlaybook requires L1 but effective ceiling is L0"
+    assert denial.metadata["reason_code"] == "PlaybookAuthorityDenied"
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+
+
+def test_incompatible_case_type_refusal_is_durably_audited(migrated_engine: Engine) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(playbooks)
+    matter = _intake_complete_matter(casework, case_type=CaseType.UNSUPPORTED)
+
+    with pytest.raises(PlaybookAssignmentError, match="case_type incompatible"):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    reloaded = casework.get_matter(matter.matter_id, actor=_ACTOR, source_channel=_CHANNEL)
+    assert reloaded.row_version == matter.row_version
+    assert reloaded.case_type is CaseType.UNSUPPORTED
+    assert reloaded.assigned_playbook_version_id is None
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert denial.reason == "matter case_type incompatible with playbook"
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+
+
+@pytest.mark.parametrize(
+    ("facts", "expected_result"),
+    [
+        ({"flags.material_eligibility": False}, RuleResult.NO_MATCH),
+        ({}, RuleResult.UNKNOWN),
+    ],
+)
+def test_nonmatching_eligibility_refusal_is_durably_audited(
+    migrated_engine: Engine,
+    facts: dict[str, Any],
+    expected_result: RuleResult,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(
+        playbooks,
+        definition=_synthetic_definition(
+            eligibility={
+                "op": "ALL",
+                "rules": [
+                    {
+                        "field": "flags.material_eligibility",
+                        "cmp": "IS_TRUE",
+                    }
+                ],
+            }
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+
+    with pytest.raises(PlaybookAssignmentError, match=f"eligibility MATCH, got {expected_result}"):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                facts=facts,
+            )
+        )
+
+    reloaded = casework.get_matter(matter.matter_id, actor=_ACTOR, source_channel=_CHANNEL)
+    assert reloaded.row_version == matter.row_version
+    assert reloaded.assigned_playbook_version_id is None
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert (
+        denial.reason == f"AssignPlaybook requires eligibility MATCH, got {expected_result.value}"
+    )
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+
+
+def test_nonrouting_disqualifier_refusal_is_durably_audited(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(
+        playbooks,
+        definition=_synthetic_definition(
+            disqualifiers=[
+                {
+                    "disqualifier_id": "admit_liability_requested",
+                    "outcome": DisqualifierOutcome.COMPLETE_REFUSAL.value,
+                    "rule": {
+                        "field": "flags.admit_liability_requested",
+                        "cmp": "IS_TRUE",
+                    },
+                }
+            ]
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+
+    with pytest.raises(PlaybookAssignmentError, match="admit_liability_requested"):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                facts={"flags.admit_liability_requested": True},
+            )
+        )
+
+    reloaded = casework.get_matter(matter.matter_id, actor=_ACTOR, source_channel=_CHANNEL)
+    assert reloaded.status is matter.status
+    assert reloaded.row_version == matter.row_version
+    assert reloaded.assigned_playbook_version_id is None
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert denial.reason == "AssignPlaybook blocked by disqualifier admit_liability_requested"
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+
+
+def test_mark_unsupported_pinned_refusal_is_durably_audited(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    assigned = _assigned_matter(playbooks, casework)
+    pinned_version_id = assigned.assigned_playbook_version_id
+    assert pinned_version_id is not None
+
+    with pytest.raises(PlaybookAssignmentError, match="playbook pin is present"):
+        playbooks.mark_unsupported(
+            MarkUnsupportedCommand(
+                matter_id=assigned.matter_id,
+                row_version=assigned.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                reason="operator attempted unsupported classification",
+            )
+        )
+
+    reloaded = casework.get_matter(
+        assigned.matter_id,
+        actor=_ACTOR,
+        source_channel=_CHANNEL,
+    )
+    assert reloaded.status is assigned.status
+    assert reloaded.case_type is assigned.case_type
+    assert reloaded.row_version == assigned.row_version
+    assert reloaded.assigned_playbook_version_id == pinned_version_id
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, assigned.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert denial.actor == _ACTOR
+    assert denial.matter_id == assigned.matter_id
+    assert denial.reason == "MarkUnsupported refused while a playbook pin is present"
+    assert denial.metadata["command_type"] == "MarkUnsupported"
+    assert denial.metadata["playbook_version_id"] == str(pinned_version_id)
+    assert denial.metadata["from_playbook_version_id"] == str(pinned_version_id)
+
+
+@pytest.mark.parametrize(
+    ("disqualifier_id", "facts", "message"),
+    [
+        ("caller_invented", {"flags.injury_suspected": True}, "not in pinned definition"),
+        ("injury_suspected", {}, "requires MATCH, got UNKNOWN"),
+    ],
+)
+def test_pinned_disqualifier_refuses_untrusted_or_unknown_routing_input(
+    migrated_engine: Engine,
+    disqualifier_id: str,
+    facts: dict[str, Any],
+    message: str,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(
+        playbooks,
+        definition=_synthetic_definition(
+            disqualifiers=[
+                {
+                    "disqualifier_id": "injury_suspected",
+                    "outcome": DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY.value,
+                    "rule": {"field": "flags.injury_suspected", "cmp": "IS_TRUE"},
+                }
+            ]
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+    assigned = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=active.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+
+    with pytest.raises(PlaybookAssignmentError, match=message):
+        playbooks.record_blocking_disqualifier(
+            RecordBlockingDisqualifierCommand(
+                matter_id=assigned.matter_id,
+                row_version=assigned.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                disqualifier_id=disqualifier_id,
+                facts=facts,
+            )
+        )
+
+    reloaded = casework.get_matter(
+        assigned.matter_id,
+        actor=_ACTOR,
+        source_channel=_CHANNEL,
+    )
+    assert reloaded.status is assigned.status
+    assert reloaded.row_version == assigned.row_version
+    assert reloaded.assigned_playbook_version_id == active.playbook_version_id
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, assigned.matter_id)
+    denial = [event for event in audits if event.event_type.value == "ACTION_DENIED"][-1]
+    assert denial.metadata["command_type"] == "RecordBlockingDisqualifier"
+    assert denial.metadata["playbook_version_id"] == str(active.playbook_version_id)
+
+
+def test_policy_denial_audit_failure_is_fail_closed(
+    migrated_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(playbooks)
+    matter = _intake_complete_matter(casework, jurisdiction=Jurisdiction.AU_NSW)
+    original_append = casework_repo.append_audit_event
+
+    def fail_action_denied(
+        connection: Connection,
+        *,
+        event_id: UUID,
+        matter_id: UUID,
+        actor: str,
+        event_type: AuditEventType,
+        entity_type: str,
+        entity_id: UUID | None,
+        correlation_id: UUID | None,
+        reason: str | None,
+        source_channel: str,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> AuditEventRecord:
+        if event_type is AuditEventType.ACTION_DENIED:
+            raise RuntimeError("synthetic policy-denial audit failure")
+        return original_append(
+            connection,
+            event_id=event_id,
+            matter_id=matter_id,
+            actor=actor,
+            event_type=event_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            correlation_id=correlation_id,
+            reason=reason,
+            source_channel=source_channel,
+            metadata=metadata,
+        )
+
+    monkeypatch.setattr(casework_repo, "append_audit_event", fail_action_denied)
+
+    with pytest.raises(PlaybookAuditWriteFailed) as raised:
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    assert isinstance(raised.value.__cause__, PlaybookAssignmentError)
+    reloaded = casework.get_matter(matter.matter_id, actor=_ACTOR, source_channel=_CHANNEL)
+    assert reloaded.status is matter.status
+    assert reloaded.case_type is matter.case_type
+    assert reloaded.row_version == matter.row_version
+    assert reloaded.assigned_playbook_version_id is None
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    assert not [event for event in audits if event.event_type is AuditEventType.ACTION_DENIED]
+
+
+def test_disqualifier_route_audit_failure_rolls_back_business_state(
+    migrated_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(
+        playbooks,
+        definition=_synthetic_definition(
+            disqualifiers=[
+                {
+                    "disqualifier_id": "injury_suspected",
+                    "outcome": DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY.value,
+                    "rule": {"field": "flags.injury_suspected", "cmp": "IS_TRUE"},
+                }
+            ]
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+    original_append = casework_repo.append_audit_event
+
+    def fail_action_denied(
+        connection: Connection,
+        *,
+        event_id: UUID,
+        matter_id: UUID,
+        actor: str,
+        event_type: AuditEventType,
+        entity_type: str,
+        entity_id: UUID | None,
+        correlation_id: UUID | None,
+        reason: str | None,
+        source_channel: str,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> AuditEventRecord:
+        if event_type is AuditEventType.ACTION_DENIED:
+            raise RuntimeError("synthetic routed-denial audit failure")
+        return original_append(
+            connection,
+            event_id=event_id,
+            matter_id=matter_id,
+            actor=actor,
+            event_type=event_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            correlation_id=correlation_id,
+            reason=reason,
+            source_channel=source_channel,
+            metadata=metadata,
+        )
+
+    monkeypatch.setattr(casework_repo, "append_audit_event", fail_action_denied)
+
+    with pytest.raises(PlaybookAuditWriteFailed):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+                facts={"flags.injury_suspected": True},
+            )
+        )
+
+    reloaded = casework.get_matter(matter.matter_id, actor=_ACTOR, source_channel=_CHANNEL)
+    assert reloaded.status is matter.status
+    assert reloaded.case_type is matter.case_type
+    assert reloaded.row_version == matter.row_version
+    assert reloaded.assigned_playbook_version_id is None
+    with migrated_engine.connect() as connection:
+        evaluation_count = connection.execute(
+            text("SELECT count(*) FROM casework_playbook_evaluations WHERE matter_id = :mid"),
+            {"mid": matter.matter_id},
+        ).scalar_one()
+    assert int(evaluation_count) == 0
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    assert not [event for event in audits if event.event_type is AuditEventType.ACTION_DENIED]
+
+
+def test_policy_denial_audit_is_matter_isolated(migrated_engine: Engine) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(playbooks)
+    denied_matter = _intake_complete_matter(casework, jurisdiction=Jurisdiction.AU_NSW)
+    other_matter = _intake_complete_matter(casework)
+
+    with pytest.raises(PlaybookAssignmentError):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=denied_matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=denied_matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    with casework_repo.transaction() as connection:
+        denied_audits = casework_repo.list_audit_events(connection, denied_matter.matter_id)
+        other_audits = casework_repo.list_audit_events(connection, other_matter.matter_id)
+    assert (
+        len([event for event in denied_audits if event.event_type is AuditEventType.ACTION_DENIED])
+        == 1
+    )
+    assert not [event for event in other_audits if event.event_type is AuditEventType.ACTION_DENIED]
+
+
+def test_nonpolicy_errors_are_not_blanket_audited(
+    migrated_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(playbooks)
+    matter = _intake_complete_matter(casework)
+
+    with pytest.raises(ValidationError):
+        AssignPlaybookCommand.model_validate(
+            {
+                "matter_id": matter.matter_id,
+                "playbook_version_id": active.playbook_version_id,
+                "row_version": matter.row_version,
+                "actor": "invalid actor with spaces",
+                "source_channel": _CHANNEL,
+            }
+        )
+
+    with pytest.raises(ConcurrencyConflictError):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version + 1,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    def fail_programming_error(**kwargs: object) -> None:
+        del kwargs
+        raise RuntimeError("synthetic programming error")
+
+    monkeypatch.setattr(playbooks, "_assert_assignable", fail_programming_error)
+    with pytest.raises(RuntimeError, match="synthetic programming error"):
+        playbooks.assign_playbook(
+            AssignPlaybookCommand(
+                matter_id=matter.matter_id,
+                playbook_version_id=active.playbook_version_id,
+                row_version=matter.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, matter.matter_id)
+    assert not [event for event in audits if event.event_type is AuditEventType.ACTION_DENIED]
+
+
+def test_upgrade_disqualifier_routes_without_repinning(migrated_engine: Engine) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    current = _create_active_synthetic(playbooks, version=1)
+    target = _create_active_synthetic(
+        playbooks,
+        version=2,
+        definition=_synthetic_definition(
+            description="Upgrade target with injury disqualifier.",
+            disqualifiers=[
+                {
+                    "disqualifier_id": "injury_suspected",
+                    "outcome": DisqualifierOutcome.RESEARCH_AND_DRAFT_ONLY.value,
+                    "rule": {"field": "flags.injury_suspected", "cmp": "IS_TRUE"},
+                }
+            ],
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+    assigned = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=current.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+
+    routed = playbooks.upgrade_playbook(
+        UpgradePlaybookCommand(
+            matter_id=assigned.matter_id,
+            target_playbook_version_id=target.playbook_version_id,
+            row_version=assigned.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+            facts={"flags.injury_suspected": True},
+        )
+    )
+
+    assert routed.status is MatterStatus.RESEARCH_AND_DRAFT_ONLY
+    assert routed.assigned_playbook_version_id == current.playbook_version_id
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, assigned.matter_id)
+    denial = [event for event in audits if event.event_type is AuditEventType.ACTION_DENIED][-1]
+    assert denial.reason == "injury_suspected"
+    assert denial.metadata["command_type"] == "UpgradePlaybook"
+    assert denial.metadata["playbook_version_id"] == str(target.playbook_version_id)
+    assert denial.metadata["from_playbook_version_id"] == str(current.playbook_version_id)
+
+
+def test_upgrade_policy_refusal_is_durably_audited(migrated_engine: Engine) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    current = _create_active_synthetic(playbooks, version=1)
+    target = _create_active_synthetic(
+        playbooks,
+        version=2,
+        definition=_synthetic_definition(
+            description="Incompatible NSW upgrade target.",
+            jurisdiction_codes=[Jurisdiction.AU_NSW.value],
+        ),
+    )
+    matter = _intake_complete_matter(casework)
+    assigned = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=current.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+
+    with pytest.raises(PlaybookAssignmentError, match="jurisdiction incompatible"):
+        playbooks.upgrade_playbook(
+            UpgradePlaybookCommand(
+                matter_id=assigned.matter_id,
+                target_playbook_version_id=target.playbook_version_id,
+                row_version=assigned.row_version,
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    reloaded = casework.get_matter(
+        assigned.matter_id,
+        actor=_ACTOR,
+        source_channel=_CHANNEL,
+    )
+    assert reloaded.row_version == assigned.row_version
+    assert reloaded.assigned_playbook_version_id == current.playbook_version_id
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, assigned.matter_id)
+    denial = [event for event in audits if event.event_type is AuditEventType.ACTION_DENIED][-1]
+    assert denial.metadata["command_type"] == "UpgradePlaybook"
+    assert denial.metadata["playbook_version_id"] == str(target.playbook_version_id)
+    assert denial.metadata["from_playbook_version_id"] == str(current.playbook_version_id)
+
+
+def test_pinned_operation_authority_refusal_is_durably_audited(
+    migrated_engine: Engine,
+) -> None:
+    playbooks, casework, _playbook_repo, casework_repo = _services(migrated_engine)
+    active = _create_active_synthetic(playbooks)
+    matter = _intake_complete_matter(casework)
+    assigned = playbooks.assign_playbook(
+        AssignPlaybookCommand(
+            matter_id=matter.matter_id,
+            playbook_version_id=active.playbook_version_id,
+            row_version=matter.row_version,
+            actor=_ACTOR,
+            source_channel=_CHANNEL,
+        )
+    )
+    retired = playbooks.retire_version(
+        RetireVersionCommand(
+            playbook_version_id=active.playbook_version_id,
+            row_version=active.row_version,
+            actor=_ACTOR,
+            retirement_reason_code="TEST_RETIRED",
+        )
+    )
+
+    with pytest.raises(PlaybookAuthorityDenied):
+        playbooks.upsert_intake_answer(
+            UpsertIntakeAnswerCommand(
+                matter_id=assigned.matter_id,
+                question_id="incident_note",
+                value_type=IntakeValueType.TEXT,
+                value_text="must not persist",
+                actor=_ACTOR,
+                source_channel=_CHANNEL,
+            )
+        )
+
+    reloaded = casework.get_matter(
+        assigned.matter_id,
+        actor=_ACTOR,
+        source_channel=_CHANNEL,
+    )
+    assert reloaded.row_version == assigned.row_version
+    assert reloaded.assigned_playbook_version_id == retired.playbook_version_id
+    with casework_repo.transaction() as connection:
+        audits = casework_repo.list_audit_events(connection, assigned.matter_id)
+    denial = [event for event in audits if event.event_type is AuditEventType.ACTION_DENIED][-1]
+    assert denial.metadata["command_type"] == "UpsertIntakeAnswer"
+    assert denial.metadata["playbook_version_id"] == str(retired.playbook_version_id)
+    with migrated_engine.connect() as connection:
+        answer_count = connection.execute(
+            text("SELECT count(*) FROM casework_intake_answers WHERE matter_id = :mid"),
+            {"mid": assigned.matter_id},
+        ).scalar_one()
+    assert int(answer_count) == 0
 
 
 def test_rejected_fallback_persists_evaluation_and_audit_after_outer_rollback(
