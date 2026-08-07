@@ -11,7 +11,7 @@ from .conftest import alembic_config
 
 pytestmark = pytest.mark.integration
 
-_REVISION = "0006_playbook_framework"
+_REVISION = "0007_evidence_vault"
 _CASEWORK_TABLES = {
     "casework_matters",
     "casework_parties",
@@ -35,9 +35,33 @@ _PROVENANCE_TABLES = {
     "provenance_artifacts",
     "source_document_captures",
 }
+_EVIDENCE_TABLES = (
+    "casework_evidence_checklist_links",
+    "casework_evidence_derivations",
+    "casework_evidence_records",
+)
+
+
+def _clear_evidence_data(database_url: str) -> None:
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        any_exist = False
+        for table in _EVIDENCE_TABLES:
+            if connection.execute(text(f"SELECT to_regclass('{table}') IS NOT NULL")).scalar_one():
+                any_exist = True
+        if not any_exist:
+            return
+        for table in _EVIDENCE_TABLES:
+            connection.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))
+        for table in _EVIDENCE_TABLES:
+            connection.execute(text(f"DELETE FROM {table}"))
+        for table in _EVIDENCE_TABLES:
+            connection.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))
+    engine.dispose()
 
 
 def test_casework_upgrade_reaches_head(test_database_url: str) -> None:
+    _clear_evidence_data(test_database_url)
     config = alembic_config(test_database_url)
     command.downgrade(config, "base")
     command.upgrade(config, "head")
@@ -64,6 +88,7 @@ def test_casework_downgrade_preserves_provenance_sentinel(test_database_url: str
     engine = create_engine(test_database_url)
     try:
         # Phase 2 downgrade refuses if playbook/pin/MOTOR case_type rows remain.
+        _clear_evidence_data(test_database_url)
         with engine.begin() as connection:
             for table_name in (
                 "casework_checklist_states_history",

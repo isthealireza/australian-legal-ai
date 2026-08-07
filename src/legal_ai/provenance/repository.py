@@ -10,8 +10,9 @@ from sqlalchemy import Connection, Engine, RowMapping, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 
-from legal_ai.db import artifacts, source_document_captures
+from legal_ai.db import source_document_captures
 
+from .artifact_registry import ArtifactRegistry
 from .content_store import ArtifactContent, LocalArtifactStore, StoredArtifact
 from .errors import ProvenanceIntegrityConflict
 from .models import FederalRegisterCapture
@@ -55,6 +56,7 @@ class ProvenanceRepository:
     ) -> None:
         self._bind = bind
         self._artifact_store = artifact_store
+        self._artifact_registry = ArtifactRegistry()
 
     def capture(
         self,
@@ -73,7 +75,9 @@ class ProvenanceRepository:
 
         try:
             with self._transaction() as connection:
-                self._insert_or_obtain_artifact(connection, artifact, provenance)
+                self._artifact_registry.register(
+                    connection, artifact, media_type=provenance.response_content_type
+                )
                 capture = self._insert_or_obtain_capture(connection, artifact, provenance)
         except IntegrityError as exc:
             raise ProvenanceIntegrityConflict(
@@ -96,34 +100,6 @@ class ProvenanceRepository:
 
         with self._bind.begin():
             yield self._bind
-
-    @staticmethod
-    def _insert_or_obtain_artifact(
-        connection: Connection,
-        artifact: StoredArtifact,
-        provenance: FederalRegisterCapture,
-    ) -> None:
-        submitted = {
-            "sha256": artifact.sha256,
-            "byte_size": artifact.byte_size,
-            "media_type": provenance.response_content_type,
-            "storage_key": artifact.storage_key,
-        }
-        connection.execute(
-            insert(artifacts)
-            .values(**submitted)
-            .on_conflict_do_nothing(index_elements=[artifacts.c.sha256])
-        )
-        existing = (
-            connection.execute(select(artifacts).where(artifacts.c.sha256 == artifact.sha256))
-            .mappings()
-            .one()
-        )
-        ProvenanceRepository._require_compatible(
-            "artifact",
-            existing,
-            submitted,
-        )
 
     @staticmethod
     def _insert_or_obtain_capture(
