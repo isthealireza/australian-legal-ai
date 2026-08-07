@@ -14,7 +14,7 @@ from .conftest import alembic_config
 
 pytestmark = pytest.mark.integration
 
-_REVISION = "0006_playbook_framework"
+_REVISION = "0007_evidence_vault"
 _PRIOR = "0005_casework_core"
 _PLAYBOOK_TABLES = {
     "playbooks",
@@ -31,6 +31,11 @@ _PROVENANCE_TABLES = {
     "provenance_artifacts",
     "source_document_captures",
 }
+_EVIDENCE_TABLES = (
+    "casework_evidence_checklist_links",
+    "casework_evidence_derivations",
+    "casework_evidence_records",
+)
 _IMMUTABLE_CLEANUP = (
     "casework_checklist_states_history",
     "casework_intake_answers_history",
@@ -43,6 +48,14 @@ _IMMUTABLE_CLEANUP = (
 
 def _clear_playbook_data(engine: Engine) -> None:
     with engine.begin() as connection:
+        any_exist = False
+        for table_name in _IMMUTABLE_CLEANUP:
+            if connection.execute(
+                text(f"SELECT to_regclass('{table_name}') IS NOT NULL")
+            ).scalar_one():
+                any_exist = True
+        if not any_exist:
+            return
         for table_name in _IMMUTABLE_CLEANUP:
             connection.execute(text(f"ALTER TABLE {table_name} DISABLE TRIGGER USER"))
         connection.execute(text("DELETE FROM casework_checklist_states"))
@@ -67,6 +80,24 @@ def _clear_playbook_data(engine: Engine) -> None:
             connection.execute(text(f"ALTER TABLE {table_name} ENABLE TRIGGER USER"))
 
 
+def _clear_evidence_data(database_url: str) -> None:
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        any_exist = False
+        for table in _EVIDENCE_TABLES:
+            if connection.execute(text(f"SELECT to_regclass('{table}') IS NOT NULL")).scalar_one():
+                any_exist = True
+        if not any_exist:
+            return
+        for table in _EVIDENCE_TABLES:
+            connection.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER USER"))
+        for table in _EVIDENCE_TABLES:
+            connection.execute(text(f"DELETE FROM {table}"))
+        for table in _EVIDENCE_TABLES:
+            connection.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER USER"))
+    engine.dispose()
+
+
 def test_upgrade_to_head_is_playbook_framework(test_database_url: str) -> None:
     config = alembic_config(test_database_url)
     command.upgrade(config, "head")
@@ -75,6 +106,7 @@ def test_upgrade_to_head_is_playbook_framework(test_database_url: str) -> None:
         _clear_playbook_data(engine)
     finally:
         engine.dispose()
+    _clear_evidence_data(test_database_url)
     command.downgrade(config, "base")
     command.upgrade(config, "head")
 
@@ -146,7 +178,8 @@ def test_downgrade_refuses_when_playbook_row_exists(test_database_url: str) -> N
                 },
             )
 
-        with pytest.raises(Exception, match="refusing to downgrade"):
+        _clear_evidence_data(test_database_url)
+        with pytest.raises(Exception, match="refusing to downgrade 0006_playbook_framework"):
             command.downgrade(config, _PRIOR)
 
         with engine.connect() as connection:
@@ -183,6 +216,7 @@ def test_downgrade_empty_succeeds_and_provenance_survives_upgrade(
                 {"sha": sha, "storage_key": storage_key},
             )
 
+        _clear_evidence_data(test_database_url)
         command.downgrade(config, _PRIOR)
 
         with engine.connect() as connection:

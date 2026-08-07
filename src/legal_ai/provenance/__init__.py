@@ -1,5 +1,6 @@
 """Public immutable provenance storage interface."""
 
+from .artifact_registry import ArtifactRecord, ArtifactRegistry
 from .content_store import LocalArtifactStore, StoredArtifact
 from .errors import (
     ArtifactIntegrityError,
@@ -15,6 +16,8 @@ from .repository import CaptureRegistration, ProvenanceRepository, SourceDocumen
 
 __all__ = [
     "ArtifactIntegrityError",
+    "ArtifactRecord",
+    "ArtifactRegistry",
     "ArtifactPathError",
     "ArtifactPublicationError",
     "ArtifactStoreError",

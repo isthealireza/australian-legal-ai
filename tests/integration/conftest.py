@@ -14,6 +14,9 @@ from legal_ai.db import (
     casework_checklist_states,
     casework_checklist_states_history,
     casework_deadlines,
+    casework_evidence_checklist_links,
+    casework_evidence_derivations,
+    casework_evidence_records,
     casework_fact_items,
     casework_intake_answers,
     casework_intake_answers_history,
@@ -34,6 +37,9 @@ _PROJECT_ROOT = Path(__file__).parents[2]
 _SAFE_TEST_HOSTS = frozenset({"localhost", "127.0.0.1", "postgres"})
 
 _IMMUTABLE_CLEANUP_TABLES = (
+    "casework_evidence_records",
+    "casework_evidence_derivations",
+    "casework_evidence_checklist_links",
     "casework_audit_events",
     "playbook_audit_events",
     "casework_playbook_evaluations",
@@ -79,6 +85,9 @@ def migrated_engine(test_database_url: str) -> Iterator[Engine]:
         # Immutable / no-delete triggers block cleanup; disable only on disposable DBs.
         for table_name in _IMMUTABLE_CLEANUP_TABLES:
             connection.execute(text(f"ALTER TABLE {table_name} DISABLE TRIGGER USER"))
+        connection.execute(delete(casework_evidence_checklist_links))
+        connection.execute(delete(casework_evidence_derivations))
+        connection.execute(delete(casework_evidence_records))
         connection.execute(delete(casework_checklist_states))
         connection.execute(delete(casework_checklist_states_history))
         connection.execute(delete(casework_intake_answers))

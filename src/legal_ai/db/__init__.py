@@ -10,6 +10,11 @@ from .casework_schema import (
     casework_party_roles,
     casework_tasks,
 )
+from .evidence_schema import (
+    casework_evidence_checklist_links,
+    casework_evidence_derivations,
+    casework_evidence_records,
+)
 from .playbook_schema import (
     casework_checklist_states,
     casework_checklist_states_history,
@@ -29,6 +34,9 @@ __all__ = [
     "casework_checklist_states",
     "casework_checklist_states_history",
     "casework_deadlines",
+    "casework_evidence_checklist_links",
+    "casework_evidence_derivations",
+    "casework_evidence_records",
     "casework_fact_items",
     "casework_intake_answers",
     "casework_intake_answers_history",

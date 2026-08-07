@@ -113,6 +113,20 @@ AUDIT_METADATA_ALLOWLIST: frozenset[str] = frozenset(
         "question_id",
         "checklist_item_id",
         "correlation_id",
+        "evidence_id",
+        "source_evidence_id",
+        "artifact_sha256",
+        "expected_byte_size",
+        "detected_media_type",
+        "declared_media_type",
+        "evidence_kind",
+        "evidence_role",
+        "review_status",
+        "operation_code",
+        "operation_version",
+        "processor_version",
+        "parameters_sha256",
+        "deterministic",
     }
 )
 _AUDIT_METADATA_MAX_BYTES = 4096
