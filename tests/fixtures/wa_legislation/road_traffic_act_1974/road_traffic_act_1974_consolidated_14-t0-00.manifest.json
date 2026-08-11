@@ -1,0 +1,58 @@
+{
+  "source_id": "wa_legislation:road_traffic_act_1974:consolidated:14-t0-00",
+  "source_system": "wa_legislation",
+  "jurisdiction": "WA",
+  "act": {
+    "title": "Road Traffic Act 1974",
+    "jurisdiction": "WA",
+    "act_number": "059 of 1974",
+    "assent_date": "1974-12-03"
+  },
+  "provisions": [
+    {
+      "identifier": "s 55",
+      "pinpoint": "section 55",
+      "heading": "Driver in incident occasioning property damage to stop and give information"
+    },
+    {
+      "identifier": "s 56",
+      "pinpoint": "section 56",
+      "heading": "Driver in incident occasioning bodily harm or property damage to report incident to police"
+    }
+  ],
+  "version": {
+    "type": "consolidated",
+    "official_version": true,
+    "suffix": "14-t0-00",
+    "document_id": "mrdoc_48198",
+    "version_label": "Road Traffic Act 1974 - [14-t0-00]",
+    "currency_start": "2025-01-10",
+    "currency_end": "current"
+  },
+  "status": {
+    "in_force": true,
+    "currency": "Current",
+    "status_date": "2025-01-10",
+    "source_statement": "Currency start 10 Jan 2025; Currency end: Current (in force)"
+  },
+  "request": {
+    "method": "GET",
+    "url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/RedirectURL?OpenAgent&query=mrdoc_48198.pdf",
+    "resolved_file_url": "https://www.legislation.wa.gov.au/legislation/prod/filestore.nsf/FileURL/mrdoc_48198.pdf/$FILE/Road%20Traffic%20Act%201974%20-%20%5B14-t0-00%5D.pdf?OpenElement"
+  },
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a703.html&view=consolidated",
+  "retrieved_at_utc": "2026-08-11T10:27:03Z",
+  "http_status": 200,
+  "content_type": "application/pdf",
+  "content_length": 1294287,
+  "file": "road_traffic_act_1974_consolidated_14-t0-00.pdf",
+  "sha256": "61dbca2d8eddc33a3ebc759b8759886192efaa8b09440089541efd35ed19c525",
+  "encoding": "binary; application/pdf; stored byte-exact with no transformation, normalisation, re-serialisation, or correction",
+  "hash_convention": "SHA-256 computed over the exact stored file bytes; binary file, no trailing-newline convention applied",
+  "notes": [
+    "Whole-Act official consolidated PDF captured as a single shared fixture; sections 55 and 56 are recorded as pinpoints, not extracted as separate text.",
+    "Recorded fixtures are a point-in-time snapshot for deterministic testing only. They are NOT a live legal-currency service and may not reflect amendments made after the retrieval timestamp.",
+    "Per-section exact-text extraction and deterministic validation are deferred to the owner-authorised Phase 4 research module (ADR 0013).",
+    "The official host is www.legislation.wa.gov.au, a subdomain of legislation.wa.gov.au."
+  ]
+}
