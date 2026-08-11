@@ -12,3 +12,4 @@ Phase 0 accepts: [0009 Casework OS product pivot and first operational vertical]
 Phase 2 accepts: [0010 Phase 2 playbook framework](0010-phase-2-playbook-framework.md).
 Governance standardization accepts: [0011 Governance and engineering terminology](0011-governance-and-engineering-terminology.md).
 Phase 3 accepts: [0012 Matter Evidence Vault and Safe Upload Boundary](0012-matter-evidence-vault-and-upload-boundary.md).
+Phase 4 accepts: [0013 Phase 4 Research and Evidence Packets](0013-phase-4-research-evidence-packets.md).
