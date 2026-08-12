@@ -29,9 +29,12 @@ Subject to a separate owner authorisation, a future task may create:
 - an injected `ResearchAuditSink` interface with an in-memory, test-harness-only
   implementation;
 - the typed refusal contract, including terminal `AUDIT_SINK_UNAVAILABLE`;
-- recorded WA fixtures sourced only from `source_system` `wa_legislation` and
-  HTTPS host `legislation.wa.gov.au`, committed as durable version-controlled
-  test data; and
+- recorded WA fixtures sourced only from `source_system` `wa_legislation`, over
+  HTTPS from a closed two-host allowlist of exactly
+  `legislation.wa.gov.au` or `www.legislation.wa.gov.au` (the `www` host is
+  included because the official WA Legislation homepage and resolved official
+  document URLs use it; no wildcard or other subdomain is trusted), committed as
+  durable version-controlled test data; and
 - unit and integration tests over those fixtures.
 
 ## Prohibited surface
@@ -74,8 +77,10 @@ the in-memory test audit sink is not persistence.
   missing, invalid, or `UNKNOWN` effective/commencement/repeal status or relevant
   status date refuses.
 - `sha256` is recomputed against the exact source content and must match.
-- Only `wa_legislation` / `legislation.wa.gov.au` fixtures pass the source
-  allowlist; all other sources refuse.
+- Only `wa_legislation` fixtures whose `official_source_url` is HTTPS on the
+  closed two-host allowlist (`legislation.wa.gov.au` or
+  `www.legislation.wa.gov.au`) pass the source allowlist; all other sources or
+  hosts refuse.
 - Both successful validation and normal refusal attempt an audit event before
   returning; an absent, unavailable, or failing sink yields terminal
   `AUDIT_SINK_UNAVAILABLE` with no packet, proposition, citation, or partial
@@ -116,7 +121,8 @@ There are no migrations, no schema changes, and no persisted data to reverse.
   model use.
 - Confirm the full packet contract and deterministic validation, including
   hash recomputation against exact source content.
-- Confirm the sole fixture source (`wa_legislation` / `legislation.wa.gov.au`).
+- Confirm the sole fixture source (`wa_legislation`) and the closed two-host
+  allowlist (`legislation.wa.gov.au` or `www.legislation.wa.gov.au`, HTTPS).
 - Confirm fail-closed audit behaviour and terminal `AUDIT_SINK_UNAVAILABLE`.
 - Confirm no partial result is ever emitted on refusal.
 - Confirm provider-neutral wording and no new dependencies.

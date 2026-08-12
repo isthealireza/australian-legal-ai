@@ -64,10 +64,19 @@ test audit sink in §5 is not persistence.
 The only approved recorded-fixture source for the first slice is:
 
 - `source_system` = `wa_legislation`; and
-- HTTPS host = `legislation.wa.gov.au`.
+- an HTTPS URL whose host is exactly one of the following closed two-host
+  allowlist:
+  - `legislation.wa.gov.au`; or
+  - `www.legislation.wa.gov.au`.
 
-No other source system or host is permitted. This is recorded-fixture metadata
-only. It is not authorisation for live retrieval, network access, or ingestion.
+The `www.legislation.wa.gov.au` host is included because the official WA
+Legislation homepage and the resolved official document URLs use it. The
+allowlist is closed and exact: no other host is permitted, wildcard subdomains
+are not permitted, and no arbitrary subdomain is trusted. HTTPS is required.
+Recorded URLs are kept faithful to the official source and are not rewritten
+from `www.legislation.wa.gov.au` to the apex host. This is recorded-fixture
+metadata only. It is not authorisation for live retrieval, network access, or
+ingestion.
 
 ### 4. WA evidence-packet contract and deterministic validation
 
@@ -78,7 +87,9 @@ checks each one deterministically:
 - `source_id` — packet identity;
 - `source_system` — must equal `wa_legislation`;
 - `jurisdiction` — must equal `WA`;
-- `official_source_url` — HTTPS host must equal `legislation.wa.gov.au`;
+- `official_source_url` — an HTTPS URL whose host is exactly one of the closed
+  two-host allowlist `legislation.wa.gov.au` or `www.legislation.wa.gov.au`
+  (§3); no wildcard or other subdomain;
 - `title` / Act identity — the named instrument;
 - provision identifier and pinpoint — the cited provision and pinpoint
   reference;
@@ -160,8 +171,9 @@ Positive consequences:
 
 Costs and limitations:
 
-- the fixture source is intentionally narrow (`wa_legislation` /
-  `legislation.wa.gov.au`);
+- the fixture source is intentionally narrow (`wa_legislation`, with a closed
+  two-host allowlist of `legislation.wa.gov.au` and
+  `www.legislation.wa.gov.au`);
 - recorded fixtures are not live legal currency;
 - the in-memory audit sink is test-harness-only and not durable; and
 - live retrieval, durable capture, and production audit storage remain
