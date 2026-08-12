@@ -1,6 +1,6 @@
 # Implementation Status — Phase Ledger
 
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-13
 
 ## Phase status
 
@@ -10,7 +10,7 @@
 | Phase 1 — Generic matter core | **Completed** (merged to `main` @ `8766468e00be2dc79b7eda08baec713d5356654d`, PR #9) |
 | Phase 2 — Playbook registry and WA motor playbook | **Completed** (merged to `main` @ `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942`, PR #11) |
 | Phase 3 — Evidence vault extension | **Completed** (merged to `main` @ `bb587538afed8e96c116d9952ae3dad0217c1534`, PR #17) |
-| Phase 4 — Research and evidence packets | Not Started |
+| Phase 4 — Research and evidence packets | **Not Started** (fixture-recording prerequisite complete — see "Phase 4 fixture-recording prerequisite" below; implementation not started) |
 | Phase 5 — Drafting with mock model | Not Started |
 | Phase 6 — Approval service | Not Started |
 | Phase 7 — Communication ingestion and draft replies | Not Started |
@@ -83,6 +83,29 @@
   - strict mypy passed;
   - full-history secret scan passed.
 
+## Phase 4 fixture-recording prerequisite (completed)
+
+This records a completed, bounded, documentation-and-fixture **prerequisite**
+only. It is **not** Phase 4 implementation, and it does not change the Phase 4
+status: **Phase 4 Slice 1 implementation remains Not Started.**
+
+- The bounded Phase 4 WA fixture-recording task is **complete**.
+- **PR #20** was merged into `main`.
+- **Merge commit:** `d6899e65a803b0322532e0c49bb33d7f808a2633`.
+- The recorded fixture is the **byte-exact consolidated Road Traffic Act 1974
+  (WA) PDF**, version `14-t0-00`.
+- Sections **55** and **56** are recorded as **manifest pinpoints** only.
+- Fixture **SHA-256:**
+  `61dbca2d8eddc33a3ebc759b8759886192efaa8b09440089541efd35ed19c525`.
+- The closed HTTPS hostname allowlist contains exactly:
+  - `legislation.wa.gov.au`
+  - `www.legislation.wa.gov.au`
+- The recorded fixture **is not a live legal-currency service**.
+- **Section-level extraction and validation remain unimplemented.**
+- This task implemented **no** live retrieval adapter, runtime network path,
+  model use, persistence, database or object-store write, migration, Evidence
+  Vault write, playbook activation, external action, API, or UI.
+
 ## Grounding security boundary
 
 Grounding is application-enforced via `FailClosedGroundingGate` on every
@@ -109,7 +132,11 @@ Integration suite executed against disposable `postgres:16-alpine`.
 
 ## Exact next action
 
-Phase 3 is **Completed**. Phase 4 remains **Not Started**. This ledger update
-does not authorise Phase 4 implementation. Phase 4 requires a separately
-owner-authorised architecture or planning task before any implementation work.
-No current authorization exists for Phase 4 code.
+Phase 3 is **Completed**. The Phase 4 WA fixture-recording prerequisite is
+**Completed** (PR #20; see above), but Phase 4 Slice 1 implementation remains
+**Not Started**. This ledger update records the completed fixture-recording
+prerequisite only; it does not authorise Phase 4 implementation. The Phase 4
+Slice 1 architecture and scope are already defined by ADR 0013 and the Phase 4
+Slice 1 Scope Card; the remaining requirement is separate, explicit owner
+authorisation for the bounded Phase 4 Slice 1 implementation task before any
+implementation work. No current authorisation exists for Phase 4 code.
