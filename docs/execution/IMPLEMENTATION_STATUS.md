@@ -1,6 +1,6 @@
 # Implementation Status — Phase Ledger
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-15
 
 ## Phase status
 
@@ -10,7 +10,7 @@
 | Phase 1 — Generic matter core | **Completed** (merged to `main` @ `8766468e00be2dc79b7eda08baec713d5356654d`, PR #9) |
 | Phase 2 — Playbook registry and WA motor playbook | **Completed** (merged to `main` @ `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942`, PR #11) |
 | Phase 3 — Evidence vault extension | **Completed** (merged to `main` @ `bb587538afed8e96c116d9952ae3dad0217c1534`, PR #17) |
-| Phase 4 — Research and evidence packets | **Not Started** (fixture-recording prerequisite complete — see "Phase 4 fixture-recording prerequisite" below; implementation not started) |
+| Phase 4 — Research and evidence packets | **Slice 1 implemented, not merged** (implemented on `feat/phase-4-slice-1`; pending review and owner merge — see "Phase 4 Slice 1 implementation" below) |
 | Phase 5 — Drafting with mock model | Not Started |
 | Phase 6 — Approval service | Not Started |
 | Phase 7 — Communication ingestion and draft replies | Not Started |
@@ -106,6 +106,37 @@ status: **Phase 4 Slice 1 implementation remains Not Started.**
   model use, persistence, database or object-store write, migration, Evidence
   Vault write, playbook activation, external action, API, or UI.
 
+## Phase 4 Slice 1 implementation (implemented, not merged)
+
+The bounded, owner-authorised Phase 4 Slice 1 implementation task is complete on
+its feature branch and has not been committed, pushed, or merged.
+
+- **Feature branch:** `feat/phase-4-slice-1`
+- **Base commit:** `159a695d4a2916bcc8384a9b6275a2d36e8cd5a3`
+- **Implementation record:** [Phase 4 Slice 1 Implementation](PHASE_4_SLICE_1_IMPLEMENTATION.md)
+- **Added surface:** standalone deterministic research module
+  `src/legal_ai/research/`; test-only in-memory audit sinks
+  `tests/support/research_audit.py`; unit, integration, negative, and
+  adversarial tests under `tests/research/`
+- **Local validation:** Ruff passed; formatting check passed; strict mypy passed
+  (127 source files); 821 passed, 144 skipped (baseline was 640 passed, 144
+  skipped; the 144 skips are the PostgreSQL integration suite, which this slice
+  does not touch)
+- **Recorded fixture unchanged:** SHA-256
+  `61dbca2d8eddc33a3ebc759b8759886192efaa8b09440089541efd35ed19c525`
+- **Pinpoint scope:** citation existence and pinpoint integrity are validated
+  against the **recorded manifest pinpoints**, and SHA-256 is recomputed against
+  the byte-exact whole-Act PDF content. Section-level body-text extraction
+  remains deferred: it would require a PDF parsing dependency, and new
+  dependencies are prohibited.
+- This task implemented **no** live retrieval, runtime network path, HTTP
+  client, model use, persistence, database or object-store write, migration,
+  Evidence Vault write, `source_document_captures` write, production audit
+  storage, playbook activation, external action, email, OAuth, API, UI,
+  deployment, new dependency, or L3+ authority.
+- `FailClosedGroundingGate` is untouched and remains refuse-closed. No product
+  playbook may become ACTIVE on the basis of this slice.
+
 ## Grounding security boundary
 
 Grounding is application-enforced via `FailClosedGroundingGate` on every
@@ -133,10 +164,18 @@ Integration suite executed against disposable `postgres:16-alpine`.
 ## Exact next action
 
 Phase 3 is **Completed**. The Phase 4 WA fixture-recording prerequisite is
-**Completed** (PR #20; see above), but Phase 4 Slice 1 implementation remains
-**Not Started**. This ledger update records the completed fixture-recording
-prerequisite only; it does not authorise Phase 4 implementation. The Phase 4
-Slice 1 architecture and scope are already defined by ADR 0013 and the Phase 4
-Slice 1 Scope Card; the remaining requirement is separate, explicit owner
-authorisation for the bounded Phase 4 Slice 1 implementation task before any
-implementation work. No current authorisation exists for Phase 4 code.
+**Completed** (PR #20; see above). The bounded, owner-authorised **Phase 4
+Slice 1 implementation is complete on `feat/phase-4-slice-1`** and has passed
+the full local validation battery, but it is **not committed, pushed, or
+merged**.
+
+The remaining requirements are, in order: owner review of the complete diff;
+explicit owner authorisation to commit, push, and open a Pull Request; CI
+verification; and explicit owner instruction to merge. No later phase is
+authorised, and Phase 4 does not become **Completed** until merge.
+
+Two boundaries carry forward for owner decision: section-level pinpoint
+validation against extracted body text remains deferred (it requires a
+prohibited new PDF parsing dependency), and live retrieval, durable WA capture,
+and production audit storage remain deferred to separate owner-approved
+decisions.
