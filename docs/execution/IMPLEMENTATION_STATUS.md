@@ -10,7 +10,7 @@
 | Phase 1 — Generic matter core | **Completed** (merged to `main` @ `8766468e00be2dc79b7eda08baec713d5356654d`, PR #9) |
 | Phase 2 — Playbook registry and WA motor playbook | **Completed** (merged to `main` @ `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942`, PR #11) |
 | Phase 3 — Evidence vault extension | **Completed** (merged to `main` @ `bb587538afed8e96c116d9952ae3dad0217c1534`, PR #17) |
-| Phase 4 — Research and evidence packets | **Slice 1 implemented, not merged** (implemented on `feat/phase-4-slice-1`; pending review and owner merge — see "Phase 4 Slice 1 implementation" below) |
+| Phase 4 — Research and evidence packets | **Slice 1 Completed** (merged to `main` @ `d758ae7769282aedd188705ac2de8b432880d1a3`, PR #22); Slice 2 **Not Started** and not authorised — see "Phase 4 Slice 1 implementation" below |
 | Phase 5 — Drafting with mock model | Not Started |
 | Phase 6 — Approval service | Not Started |
 | Phase 7 — Communication ingestion and draft replies | Not Started |
@@ -50,6 +50,13 @@
   authenticity/admissibility assessment; live model interpretation; UI or
   FastAPI; email/external dispatch; OAuth; production object storage; cloud
   deployment; real client data; or L3+ authority
+- ADR 0013: **Accepted** (2026-08-11); Phase 4 Research and Evidence Packets —
+  first slice
+- Phase 4 Slice 1 WA Research and Evidence Packets: **Completed** on `main` via
+  PR #22 @ `d758ae7769282aedd188705ac2de8b432880d1a3`
+- Phase 4 Slice 2 is **not authorised**. It requires a separate owner-approved
+  bounded scope and a separate architecture decision before any planning or
+  implementation work begins
 
 ## Phase 2 implementation branch and baseline (historical)
 
@@ -86,8 +93,9 @@
 ## Phase 4 fixture-recording prerequisite (completed)
 
 This records a completed, bounded, documentation-and-fixture **prerequisite**
-only. It is **not** Phase 4 implementation, and it does not change the Phase 4
-status: **Phase 4 Slice 1 implementation remains Not Started.**
+only. It was **not** Phase 4 implementation. The Phase 4 Slice 1 implementation
+that followed it is recorded separately in "Phase 4 Slice 1 implementation
+(completed)" below.
 
 - The bounded Phase 4 WA fixture-recording task is **complete**.
 - **PR #20** was merged into `main`.
@@ -106,36 +114,55 @@ status: **Phase 4 Slice 1 implementation remains Not Started.**
   model use, persistence, database or object-store write, migration, Evidence
   Vault write, playbook activation, external action, API, or UI.
 
-## Phase 4 Slice 1 implementation (implemented, not merged)
+## Phase 4 Slice 1 implementation (completed)
 
-The bounded, owner-authorised Phase 4 Slice 1 implementation task is complete on
-its feature branch and has not been committed, pushed, or merged.
+The bounded, owner-authorised Phase 4 Slice 1 implementation task is
+**Completed** and **merged to `main`**.
 
-- **Feature branch:** `feat/phase-4-slice-1`
+- **Historical feature branch:** `feat/phase-4-slice-1`
 - **Base commit:** `159a695d4a2916bcc8384a9b6275a2d36e8cd5a3`
+- **Implementation PR:** #22
+- **Reviewed PR head:** `c7ced535d0dea98a1a3e518f3a9a2f3fd20ff089`
+- **Merge commit:** `d758ae7769282aedd188705ac2de8b432880d1a3`
 - **Implementation record:** [Phase 4 Slice 1 Implementation](PHASE_4_SLICE_1_IMPLEMENTATION.md)
 - **Added surface:** standalone deterministic research module
   `src/legal_ai/research/`; test-only in-memory audit sinks
   `tests/support/research_audit.py`; unit, integration, negative, and
   adversarial tests under `tests/research/`
-- **Local validation:** Ruff passed; formatting check passed; strict mypy passed
-  (127 source files); 821 passed, 144 skipped (baseline was 640 passed, 144
-  skipped; the 144 skips are the PostgreSQL integration suite, which this slice
-  does not touch)
+- **Validated implementation evidence:** Ruff passed; formatting check passed;
+  strict mypy passed (127 source files); 821 passed, 144 skipped (baseline was
+  640 passed, 144 skipped; the 144 skips are the PostgreSQL integration suite,
+  which this slice does not touch)
 - **Recorded fixture unchanged:** SHA-256
   `61dbca2d8eddc33a3ebc759b8759886192efaa8b09440089541efd35ed19c525`
-- **Pinpoint scope:** citation existence and pinpoint integrity are validated
-  against the **recorded manifest pinpoints**, and SHA-256 is recomputed against
-  the byte-exact whole-Act PDF content. Section-level body-text extraction
-  remains deferred: it would require a PDF parsing dependency, and new
-  dependencies are prohibited.
-- This task implemented **no** live retrieval, runtime network path, HTTP
-  client, model use, persistence, database or object-store write, migration,
-  Evidence Vault write, `source_document_captures` write, production audit
-  storage, playbook activation, external action, email, OAuth, API, UI,
-  deployment, new dependency, or L3+ authority.
+- **No Alembic change:** source head remains `0007_evidence_vault`
+
+### Preserved limitations
+
+- Validation covers the **byte-exact whole-Act consolidated PDF**; SHA-256 is
+  recomputed against those exact bytes.
+- Sections **55** and **56** are recorded as **manifest pinpoints only**.
+- **No section-body text was extracted**, and **no section-body validation is
+  claimed**. Citation existence and pinpoint integrity are validated against the
+  recorded manifest pinpoints. Section-level body-text extraction remains
+  deferred: it would require a PDF parsing dependency, and new dependencies are
+  prohibited.
+- The recorded fixture **is not a live legal-currency service**. It is a
+  point-in-time snapshot and may not reflect later amendments.
+- **No live retrieval or runtime network path exists.**
+- This task implemented **no** model use, persistence, database or object-store
+  write, migration, Evidence Vault write, `source_document_captures` write,
+  production audit storage, playbook activation, external action, email, OAuth,
+  API, UI, deployment, new dependency, or L3+ authority.
 - `FailClosedGroundingGate` is untouched and remains refuse-closed. No product
   playbook may become ACTIVE on the basis of this slice.
+
+### Phase 4 Slice 2
+
+Phase 4 Slice 2 is **Not Started** and **not currently authorised**. It requires
+a separate owner-approved bounded scope and a separate architecture decision
+before any planning or implementation work begins. Completion of Slice 1 does
+not authorise Slice 2.
 
 ## Grounding security boundary
 
@@ -164,18 +191,24 @@ Integration suite executed against disposable `postgres:16-alpine`.
 ## Exact next action
 
 Phase 3 is **Completed**. The Phase 4 WA fixture-recording prerequisite is
-**Completed** (PR #20; see above). The bounded, owner-authorised **Phase 4
-Slice 1 implementation is complete on `feat/phase-4-slice-1`** and has passed
-the full local validation battery, but it is **not committed, pushed, or
-merged**.
+**Completed** (PR #20). **Phase 4 Slice 1 is Completed and merged to `main`**
+via PR #22 @ `d758ae7769282aedd188705ac2de8b432880d1a3`, reviewed at PR head
+`c7ced535d0dea98a1a3e518f3a9a2f3fd20ff089`. No implementation work remains open
+for Slice 1.
 
-The remaining requirements are, in order: owner review of the complete diff;
-explicit owner authorisation to commit, push, and open a Pull Request; CI
-verification; and explicit owner instruction to merge. No later phase is
-authorised, and Phase 4 does not become **Completed** until merge.
+**No Phase 4 Slice 2 implementation is currently authorised**, and no later
+phase is authorised. Slice 2 requires a separate owner-approved bounded scope
+and a separate architecture decision before any planning or implementation work
+begins. Per `AGENTS.md`, the next phase does not start merely because the
+previous phase merged.
 
-Two boundaries carry forward for owner decision: section-level pinpoint
-validation against extracted body text remains deferred (it requires a
-prohibited new PDF parsing dependency), and live retrieval, durable WA capture,
-and production audit storage remain deferred to separate owner-approved
-decisions.
+The next action is therefore an owner decision, not engineering work. Three
+boundaries carry forward for that decision:
+
+1. section-level body-text extraction and validation remain deferred (they
+   require a PDF parsing dependency, which is prohibited without a separate
+   decision);
+2. live retrieval, durable WA capture, and production audit storage remain
+   deferred to separate owner-approved decisions; and
+3. the recorded fixture is not a live legal-currency service, so an
+   authoritative currency source remains an open owner decision.
