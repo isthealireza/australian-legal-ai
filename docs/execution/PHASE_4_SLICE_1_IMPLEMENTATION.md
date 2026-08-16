@@ -1,13 +1,22 @@
 # Phase 4 Slice 1 — Implementation Record: WA Research and Evidence Packets
 
-**Status:** Implemented on branch `feat/phase-4-slice-1`; not merged.
+**Status:** **Completed** — merged to `main`.
 **Date:** 2026-08-15
+**Implementation PR:** #22
+**Reviewed PR head:** `c7ced535d0dea98a1a3e518f3a9a2f3fd20ff089`
+**Merge commit:** `d758ae7769282aedd188705ac2de8b432880d1a3`
+**Historical feature branch:** `feat/phase-4-slice-1` (base
+`159a695d4a2916bcc8384a9b6275a2d36e8cd5a3`)
 **Governing ADR:** [0013 — Phase 4 Research and Evidence Packets](../adr/0013-phase-4-research-evidence-packets.md)
 **Scope Card:** [Phase 4 Slice 1 Scope Card](PHASE_4_SLICE_1_SCOPE_CARD.md)
 
 This records the bounded, owner-authorised implementation of the Phase 4 first
-slice. It documents what was built and, equally, what was deliberately not
-built.
+slice, as reviewed at PR head `c7ced535d0dea98a1a3e518f3a9a2f3fd20ff089` and
+merged via PR #22. It documents what was built and, equally, what was
+deliberately not built.
+
+Phase 4 Slice 1 is complete. **No Phase 4 Slice 2 implementation is currently
+authorised**; see [Status after merge](#status-after-merge).
 
 ## What was implemented
 
@@ -115,6 +124,10 @@ Accordingly, in this slice:
   provision pinpoints**, per the authorised surface ("pinpoint validation for
   the recorded provisions").
 
+**No section-body validation is claimed by this slice.** Nothing in the module
+asserts that quoted or extracted section text has been checked against the Act's
+section bodies, because no section-body text was extracted.
+
 Validating a pinpoint against extracted **section body text** would require PDF
 text extraction, which needs a PDF parsing dependency. New dependencies are
 prohibited by ADR 0013, the Scope Card, and `ENGINEERING_WORKFLOW.md` §9, so
@@ -122,15 +135,21 @@ section-level extraction remains deferred, exactly as the fixture README states.
 This is an owner decision to make before a slice that must prove quoted text
 against section bodies.
 
+The recorded fixture **is not a live legal-currency service**. It is a
+point-in-time snapshot for deterministic testing and may not reflect amendments
+made after its retrieval timestamp; the status and version fields reflect
+recorded fixture metadata, not a live authoritative currency source.
+
 ## Boundaries respected
 
-The slice adds no live retrieval, runtime network access, HTTP client, model
-call, model-based interpretation, database or object-store persistence,
-migration, Evidence Vault write, `source_document_captures` write, production
-audit storage, playbook activation, external action, email, OAuth, API or
-FastAPI endpoint, UI, deployment, new dependency, or L3+ authority.
+The slice adds no live retrieval, no runtime network path, and no HTTP client.
+It adds no model call, model-based interpretation, database or object-store
+persistence, migration, Evidence Vault write, `source_document_captures` write,
+production audit storage, playbook activation, external action, email, OAuth,
+API or FastAPI endpoint, UI, deployment, new dependency, or L3+ authority.
 `FailClosedGroundingGate` is untouched and remains refuse-closed. The recorded
-PDF and manifest bytes are unmodified.
+PDF and manifest bytes are unmodified. These boundaries are unchanged by the
+merge.
 
 ## Validation evidence
 
@@ -160,9 +179,32 @@ Fixture integrity was re-verified after implementation:
 | Negative | Missing and invalid fields; non-WA jurisdiction; wrong source system; non-allowlisted host; HTTP; missing version and date; unknown status; wrong status date; hash mismatch; pinpoint mismatch |
 | Adversarial | Fabricated provisions; out-of-corpus requests; cross-jurisdiction traps; injected instructions in manifests, pinpoints, headings, and content bytes |
 
+## Status after merge
+
+Phase 4 Slice 1 is **Completed**. It was reviewed at PR head
+`c7ced535d0dea98a1a3e518f3a9a2f3fd20ff089` and merged to `main` via PR #22 as
+merge commit `d758ae7769282aedd188705ac2de8b432880d1a3`. No implementation work
+remains open for this slice.
+
+**No Phase 4 Slice 2 implementation is currently authorised.** Slice 2 requires
+a separate owner-approved bounded scope and a separate architecture decision
+before any planning or implementation work begins. Completion of Slice 1
+authorises nothing further: per `AGENTS.md`, the next phase does not start
+merely because the previous phase merged.
+
+The deferrals recorded in ADR 0013 §6 stand unchanged — live WA source adapters
+and live retrieval, durable WA capture, any change to the
+`source_document_captures` `source_system` constraint, migrations for WA
+capture, and production audit storage. Section-level body-text extraction and
+validation, and an authoritative currency source for effective/status
+determination, remain open owner decisions.
+
 ## Rollback
 
-The slice is additive and isolated. Rollback is deletion of
-`src/legal_ai/research/`, `tests/research/`, `tests/support/research_audit.py`,
-and this document, plus reversal of the ledger entry. There are no migrations,
-no schema changes, and no persisted data to reverse.
+The slice is additive and isolated: a standalone module plus tests, with no
+migrations, no schema changes, and no persisted data to reverse. Now that it is
+merged, rollback is a revert of merge commit
+`d758ae7769282aedd188705ac2de8b432880d1a3` on a dedicated branch under normal
+review, which removes `src/legal_ai/research/`, `tests/research/`,
+`tests/support/research_audit.py`, and this document, and restores the previous
+ledger entry.
