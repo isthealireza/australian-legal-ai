@@ -1,26 +1,88 @@
 # Australian Legal AI
 
+A portfolio-quality **internal prototype** for a governed Australian legal
+casework and legislation-research system.
+
+**This is not a law firm, is not an admitted lawyer, and does not provide legal
+advice.** It is not suitable for final legal decisions, and its output always
+requires qualified human legal review.
+
+**Never use real client data in this prototype.** Development and testing must
+use only synthetic or public data.
+
 ## Project status
 
-This repository is in Sprint 0. It contains the engineering foundation for a
-portfolio-quality internal prototype for Alirad. It is not a law firm, does not
-provide legal advice, and is not suitable for final legal decisions.
+The latest merged work is Phase 4 Slice 1, and
+[`docs/execution/IMPLEMENTATION_STATUS.md`](docs/execution/IMPLEMENTATION_STATUS.md)
+is the authoritative status record — consult it rather than this file for what
+is complete, in progress, or authorised.
 
-Sprint 0 contains no legal-answering, retrieval, ingestion, model, API, or
-frontend functionality. The only Python package content is package metadata.
-Sprint 0 coverage validates test and coverage wiring only; the package contains
-no application statements, so meaningful coverage thresholds will be introduced
-when application code exists.
+## What exists today
 
-## MVP boundary
+- a generic matter core with a deterministic state machine, matter-isolated
+  repositories, and an audit-event foundation;
+- a versioned playbook framework. `wa_motor_property_damage_v1` is seeded as a
+  validated **DRAFT only**; no product playbook may become ACTIVE, and
+  `FailClosedGroundingGate` refuses on every activation path;
+- a matter-scoped evidence vault over an immutable content-addressed artifact
+  store, with a bounded PNG/JPEG/MP4/strict-UTF-8 upload allowlist;
+- a standalone, deterministic, read-only WA research module
+  (`src/legal_ai/research/`) that builds and validates WA evidence packets from
+  a recorded fixture under a test harness only.
 
-The planned MVP is a grounded Australian small-business legislation research
-assistant limited to an indexed corpus of official sources. Those capabilities
-are deferred to later sprints and must follow the repository governance,
-evidence, citation, and fail-closed requirements.
+## What this system does NOT do
 
-Never use real client data in this prototype. Development and testing must use
-only synthetic or public data.
+These are hard boundaries, not gaps awaiting a quick patch. Several are enforced
+in code and tests.
+
+- **No live retrieval and no runtime network path.** The research module reads
+  recorded, version-controlled fixtures only. There is no HTTP client and no
+  source adapter that reaches the internet at runtime.
+- **No model.** There is no LLM, no provider integration, and no model-based
+  legal interpretation anywhere in the repository. Every validation decision is
+  deterministic code.
+- **No API.** There is no FastAPI application and no HTTP endpoint.
+- **No UI.** There is no frontend of any kind.
+- **No persistence of research packets.** Evidence packets are in-memory values
+  returned to the caller and are never written anywhere. (Phases 1–3 do use
+  PostgreSQL for matters, playbooks, and the evidence vault; the Phase 4
+  research slice adds no schema, no migration, and no store writes.)
+- **No PDF support.** The recorded WA fixture is a PDF held as opaque bytes for
+  hashing only. Nothing parses it, extracts its text, or reads inside it.
+- **No contract review.** No contract analysis, clause extraction, or document
+  drafting exists. Contract review is listed under "Not now" in
+  `docs/execution/MVP_ROADMAP.md` §11.
+- **No external actions.** No email, no OAuth, no dispatch, no filing, no
+  submission to any insurer, police service, court, or regulator.
+- **No production deployment** and no real client data.
+
+## What the research slice actually proves
+
+Phase 4 Slice 1 validates a WA evidence packet deterministically and refuses
+totally when it cannot. Its own recorded limits matter as much as its
+capabilities:
+
+- validation covers the **byte-exact whole-Act consolidated PDF**, and SHA-256
+  is recomputed over exactly those bytes;
+- sections 55 and 56 are recorded as **manifest pinpoints only**;
+- **no section-body text was extracted, and no section-body validation is
+  claimed**;
+- the recorded fixture **is not a live legal-currency service**. It is a
+  point-in-time snapshot that may not reflect later amendments.
+
+## Offline demonstration
+
+An offline, read-only harness exercises the merged research module against the
+recorded fixture and prints a labelled result for each case, including the
+refusals:
+
+```powershell
+uv run --locked python scripts/demo_research.py
+```
+
+It needs no network, no database, and no credentials, and writes nothing outside
+standard output. [`docs/execution/DEMONSTRATION.md`](docs/execution/DEMONSTRATION.md)
+explains each case and why the refusals are the point.
 
 ## Prerequisites
 
@@ -34,16 +96,13 @@ when it is not already available.
 
 ## Tool versions
 
-The initial foundation resolves the following versions. `uv.lock` is the source
-of truth for Python development dependencies.
-
-Sprint 0 was validated locally with uv 0.11.29. GitHub Actions is pinned
-to uv 0.11.29; remote CI validation remains pending.
+`uv.lock` is the source of truth for Python development dependencies. Local and
+CI run the same uv version, as required by `ENGINEERING_WORKFLOW.md` §10.
 
 | Tool | Version |
 |---|---|
 | Python | 3.13 |
-| uv (local and CI) | 0.11.29 |
+| uv | 0.11.29 |
 | uv build backend | `>=0.11.29,<0.12` |
 | Ruff | 0.15.22 |
 | Mypy | 2.3.0 |
@@ -52,6 +111,10 @@ to uv 0.11.29; remote CI validation remains pending.
 | Pre-commit | 4.6.0 |
 | Gitleaks | 8.30.1 |
 | PostgreSQL | 16 (`pgvector/pgvector:pg16`) |
+
+CI runs on `ubuntu-latest` and executes the same commands as local development:
+secret scan, lint, format check, strict mypy, unit tests, and PostgreSQL
+integration tests.
 
 ## Windows PowerShell setup
 
@@ -85,6 +148,9 @@ uv run --locked pytest
 uv run --locked pytest --cov
 uv run --locked pre-commit run --all-files
 ```
+
+The PostgreSQL integration suite is skipped unless
+`LEGAL_AI_TEST_DATABASE_URL` points at a disposable test database.
 
 CI also scans committed Git history with the single configured secret scanner:
 
@@ -130,3 +196,17 @@ docker compose down
 
 The named volume persists local database data across normal shutdowns. No real
 client data may be stored in it.
+
+## Governance
+
+This repository is governed by documents that override any conflicting
+instruction, prompt, or generated content:
+
+- [`PROJECT_GOVERNANCE.md`](PROJECT_GOVERNANCE.md) — the root operating constitution
+- [`ENGINEERING_WORKFLOW.md`](ENGINEERING_WORKFLOW.md) — contributor rules
+- [`docs/execution/MVP_ROADMAP.md`](docs/execution/MVP_ROADMAP.md) — execution scope
+- [`docs/adr/`](docs/adr/) — accepted architecture decisions
+- [`docs/execution/IMPLEMENTATION_STATUS.md`](docs/execution/IMPLEMENTATION_STATUS.md) — the phase ledger
+
+No capability beyond the merged phases above is authorised, and no phase begins
+merely because the previous one merged.
