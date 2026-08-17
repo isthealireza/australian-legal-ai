@@ -1,6 +1,6 @@
 # Implementation Status — Phase Ledger
 
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-17 (Slice 2 merge)
 
 ## Phase status
 
@@ -10,7 +10,7 @@
 | Phase 1 — Generic matter core | **Completed** (merged to `main` @ `8766468e00be2dc79b7eda08baec713d5356654d`, PR #9) |
 | Phase 2 — Playbook registry and WA motor playbook | **Completed** (merged to `main` @ `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942`, PR #11) |
 | Phase 3 — Evidence vault extension | **Completed** (merged to `main` @ `bb587538afed8e96c116d9952ae3dad0217c1534`, PR #17) |
-| Phase 4 — Research and evidence packets | **Slice 1 Completed** (merged to `main` @ `d758ae7769282aedd188705ac2de8b432880d1a3`, PR #22); **Slice 2 In Review** (ADR 0014 Accepted 2026-08-17; PR open against `main`) |
+| Phase 4 — Research and evidence packets | **Slice 1 Completed** (merged to `main` @ `d758ae7769282aedd188705ac2de8b432880d1a3`, PR #22); **Slice 2 Completed** (merged to `main` @ `1d2ecf153806d750cb8dab4414b2ad2b0aa5c9f5`, PR #25) |
 | Phase 5 — Drafting with mock model | Not Started |
 | Phase 6 — Approval service | Not Started |
 | Phase 7 — Communication ingestion and draft replies | Not Started |
@@ -56,8 +56,8 @@
   PR #22 @ `d758ae7769282aedd188705ac2de8b432880d1a3`
 - ADR 0014: **Accepted** (2026-08-17); Phase 4 Slice 2 — recorded section
   body-text records
-- Phase 4 Slice 2 Recorded Section Body-Text Records: **In Review** — PR open
-  against `main` on branch `feat/phase-4-slice-2-section-text`
+- Phase 4 Slice 2 Recorded Section Body-Text Records: **Completed** on `main`
+  via PR #25 @ `1d2ecf153806d750cb8dab4414b2ad2b0aa5c9f5`
 
 ## Phase 2 implementation branch and baseline (historical)
 
@@ -158,12 +158,12 @@ The bounded, owner-authorised Phase 4 Slice 1 implementation task is
 - `FailClosedGroundingGate` is untouched and remains refuse-closed. No product
   playbook may become ACTIVE on the basis of this slice.
 
-### Phase 4 Slice 2 (In Review)
+### Phase 4 Slice 2 (completed)
 
-Phase 4 Slice 2 is **In Review**. ADR 0014 was accepted on 2026-08-17. The
-implementation PR is open against `main`. Merge requires independent review and
-full CI (ruff, mypy, unit tests, PostgreSQL integration suite). No Phase 5
-implementation is authorised until this PR is merged.
+Phase 4 Slice 2 is **Completed** and **merged to `main`** via PR #25 @
+`1d2ecf153806d750cb8dab4414b2ad2b0aa5c9f5`. ADR 0014 was accepted on
+2026-08-17. No Phase 5 implementation is authorised until ADR 0015 is
+separately accepted by the owner.
 
 ## Grounding security boundary
 
@@ -197,10 +197,11 @@ via PR #22 @ `d758ae7769282aedd188705ac2de8b432880d1a3`, reviewed at PR head
 `c7ced535d0dea98a1a3e518f3a9a2f3fd20ff089`. No implementation work remains open
 for Slice 1.
 
-**Phase 4 Slice 2 is In Review** (ADR 0014 Accepted 2026-08-17; PR open). No
-Phase 5 implementation is authorised until Slice 2 is merged and ADR 0015 is
-separately accepted. Per `AGENTS.md`, the next phase does not start merely
-because the previous phase merged.
+**Phase 4 Slice 2 is Completed** (ADR 0014 Accepted 2026-08-17; merged to
+`main` via PR #25 @ `1d2ecf153806d750cb8dab4414b2ad2b0aa5c9f5`). No Phase 5
+implementation is authorised until ADR 0015 is separately accepted by the
+owner. Per `AGENTS.md`, the next phase does not start merely because the
+previous phase merged.
 
 Three boundaries carry forward:
 
