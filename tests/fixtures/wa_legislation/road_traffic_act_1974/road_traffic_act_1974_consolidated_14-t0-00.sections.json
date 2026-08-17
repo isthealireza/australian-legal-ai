@@ -1,0 +1,27 @@
+{
+  "source_id": "wa_legislation:road_traffic_act_1974:consolidated:14-t0-00",
+  "source_document_sha256": "61dbca2d8eddc33a3ebc759b8759886192efaa8b09440089541efd35ed19c525",
+  "notes": [
+    "Section body-text records for Road Traffic Act 1974 (WA), version 14-t0-00.",
+    "Text hand-transcribed from the official consolidated PDF; transcription has NOT been independently verified against the source document.",
+    "All sections carry verified=false. No section may be used in any pipeline output until an independent human verification is performed and recorded.",
+    "SHA-256 digests are computed as sha256(text.encode('utf-8')) over the exact stored text bytes.",
+    "Per ADR 0014: the pipeline returns SECTION_TEXT_NOT_VERIFIED for any section with verified=false."
+  ],
+  "sections": [
+    {
+      "identifier": "s 55",
+      "heading": "Driver in incident occasioning property damage to stop and give information",
+      "text": "55.\tDriver in incident occasioning property damage to stop and give information\n\n\t(1)\tThe driver of a vehicle that is involved in an incident on a road or in a road related area owing to which damage is occasioned to property shall —\n\n\t\t(a)\tstop; and\n\n\t\t(b)\tif any person who has reasonable grounds for so requesting is present at the scene of the incident, give to that person —\n\n\t\t\t(i)\tthe driver's name and address;\n\n\t\t\t(ii)\tthe name and address of the owner of the vehicle; and\n\n\t\t\t(iii)\tthe identification of the vehicle.\n\n\t(2)\tA driver who fails to comply with subsection (1) commits an offence.\n\n\tPenalty for this subsection: a fine of 60 PU.",
+      "text_sha256": "41fb4a55d22d2a7756b9b3e6f5f54cf366a2d07b8b80ab0eed52bc576e3d163f",
+      "verified": false
+    },
+    {
+      "identifier": "s 56",
+      "heading": "Driver in incident occasioning bodily harm or property damage to report incident to police",
+      "text": "56.\tDriver in incident occasioning bodily harm or property damage to report incident to police\n\n\t(1)\tThe driver of a vehicle that is involved in an incident on a road or in a road related area owing to which bodily harm is occasioned to any person or damage is occasioned to property shall, as soon as is practicable, report the incident to a member of the Police Force.\n\n\t(2)\tA driver who fails to comply with subsection (1) commits an offence.\n\n\tPenalty for this subsection: a fine of 60 PU.",
+      "text_sha256": "f81bb6c0ce9cf90136afeab9a34bce9e44286e8ac0cde5bed3bffee1bd73b35d",
+      "verified": false
+    }
+  ]
+}

@@ -18,7 +18,13 @@ from pathlib import Path
 from typing import Protocol
 
 from .errors import AmbiguousSelection, RecordedCorpusError
-from .models import MAX_SOURCE_CONTENT_BYTES, RecordedProvision, RecordedWaSource, ResearchQuery
+from .models import (
+    MAX_SOURCE_CONTENT_BYTES,
+    RecordedProvision,
+    RecordedSection,
+    RecordedWaSource,
+    ResearchQuery,
+)
 
 _MANIFEST_SUFFIX = "*.manifest.json"
 _MAX_MANIFEST_BYTES = 1_048_576
@@ -152,8 +158,64 @@ class RecordedWaCorpus:
             raise AmbiguousSelection("recorded corpus holds more than one source for the Act")
         return self._read(matches[0])
 
-    @staticmethod
-    def _read(entry: _ManifestEntry) -> RecordedWaSource:
+    def _sections_path(self, manifest_path: Path) -> Path | None:
+        """Return the resolved path of the companion sections file, or None."""
+
+        if not manifest_path.name.endswith(".manifest.json"):
+            return None
+        stem = manifest_path.name[: -len(".manifest.json")]
+        candidate = (manifest_path.parent / (stem + ".sections.json")).resolve()
+        if (
+            candidate.is_relative_to(self._root)
+            and not candidate.is_symlink()
+            and candidate.is_file()
+        ):
+            return candidate
+        return None
+
+    def _load_sections(self, manifest_path: Path) -> tuple[RecordedSection, ...]:
+        """Load recorded section body-text records from the companion sections file.
+
+        Returns an empty tuple when no sections file exists, when the file is
+        malformed, or when individual entries are missing required fields. No
+        exception is raised: missing section data is not a corpus error.
+        """
+
+        path = self._sections_path(manifest_path)
+        if path is None:
+            return ()
+        try:
+            if path.stat().st_size > _MAX_MANIFEST_BYTES:
+                return ()
+            parsed = json.loads(path.read_bytes())
+        except (OSError, ValueError):
+            return ()
+        if not isinstance(parsed, Mapping):
+            return ()
+        raw = parsed.get("sections")
+        if not isinstance(raw, Sequence) or isinstance(raw, str | bytes):
+            return ()
+        sections: list[RecordedSection] = []
+        for entry in raw:
+            if not isinstance(entry, Mapping):
+                continue
+            identifier = _opt_str(entry, "identifier")
+            text = _opt_str(entry, "text")
+            text_sha256 = _opt_str(entry, "text_sha256")
+            if not identifier or not text or not text_sha256:
+                continue
+            sections.append(
+                RecordedSection(
+                    identifier=identifier,
+                    heading=_opt_str(entry, "heading"),
+                    text=text,
+                    text_sha256=text_sha256,
+                    verified=entry.get("verified") is True,
+                )
+            )
+        return tuple(sections)
+
+    def _read(self, entry: _ManifestEntry) -> RecordedWaSource:
         fields = entry.fields
         act = _opt_mapping(fields, "act")
         version = _opt_mapping(fields, "version")
@@ -181,4 +243,5 @@ class RecordedWaCorpus:
             retrieved_at=_opt_str(fields, "retrieved_at_utc"),
             sha256=_opt_str(fields, "sha256"),
             source_content=content,
+            sections=self._load_sections(entry.manifest_path),
         )
