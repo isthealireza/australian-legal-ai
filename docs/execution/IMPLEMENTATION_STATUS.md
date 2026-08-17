@@ -1,6 +1,6 @@
 # Implementation Status — Phase Ledger
 
-**Last updated:** 2026-08-15
+**Last updated:** 2026-08-17
 
 ## Phase status
 
@@ -10,7 +10,7 @@
 | Phase 1 — Generic matter core | **Completed** (merged to `main` @ `8766468e00be2dc79b7eda08baec713d5356654d`, PR #9) |
 | Phase 2 — Playbook registry and WA motor playbook | **Completed** (merged to `main` @ `3faad98e6fdb3a3c6a6fa40439717fa0dc66d942`, PR #11) |
 | Phase 3 — Evidence vault extension | **Completed** (merged to `main` @ `bb587538afed8e96c116d9952ae3dad0217c1534`, PR #17) |
-| Phase 4 — Research and evidence packets | **Slice 1 Completed** (merged to `main` @ `d758ae7769282aedd188705ac2de8b432880d1a3`, PR #22); Slice 2 **Not Started** and not authorised — see "Phase 4 Slice 1 implementation" below |
+| Phase 4 — Research and evidence packets | **Slice 1 Completed** (merged to `main` @ `d758ae7769282aedd188705ac2de8b432880d1a3`, PR #22); **Slice 2 In Review** (ADR 0014 Accepted 2026-08-17; PR open against `main`) |
 | Phase 5 — Drafting with mock model | Not Started |
 | Phase 6 — Approval service | Not Started |
 | Phase 7 — Communication ingestion and draft replies | Not Started |
@@ -54,9 +54,10 @@
   first slice
 - Phase 4 Slice 1 WA Research and Evidence Packets: **Completed** on `main` via
   PR #22 @ `d758ae7769282aedd188705ac2de8b432880d1a3`
-- Phase 4 Slice 2 is **not authorised**. It requires a separate owner-approved
-  bounded scope and a separate architecture decision before any planning or
-  implementation work begins
+- ADR 0014: **Accepted** (2026-08-17); Phase 4 Slice 2 — recorded section
+  body-text records
+- Phase 4 Slice 2 Recorded Section Body-Text Records: **In Review** — PR open
+  against `main` on branch `feat/phase-4-slice-2-section-text`
 
 ## Phase 2 implementation branch and baseline (historical)
 
@@ -157,12 +158,12 @@ The bounded, owner-authorised Phase 4 Slice 1 implementation task is
 - `FailClosedGroundingGate` is untouched and remains refuse-closed. No product
   playbook may become ACTIVE on the basis of this slice.
 
-### Phase 4 Slice 2
+### Phase 4 Slice 2 (In Review)
 
-Phase 4 Slice 2 is **Not Started** and **not currently authorised**. It requires
-a separate owner-approved bounded scope and a separate architecture decision
-before any planning or implementation work begins. Completion of Slice 1 does
-not authorise Slice 2.
+Phase 4 Slice 2 is **In Review**. ADR 0014 was accepted on 2026-08-17. The
+implementation PR is open against `main`. Merge requires independent review and
+full CI (ruff, mypy, unit tests, PostgreSQL integration suite). No Phase 5
+implementation is authorised until this PR is merged.
 
 ## Grounding security boundary
 
@@ -196,18 +197,20 @@ via PR #22 @ `d758ae7769282aedd188705ac2de8b432880d1a3`, reviewed at PR head
 `c7ced535d0dea98a1a3e518f3a9a2f3fd20ff089`. No implementation work remains open
 for Slice 1.
 
-**No Phase 4 Slice 2 implementation is currently authorised**, and no later
-phase is authorised. Slice 2 requires a separate owner-approved bounded scope
-and a separate architecture decision before any planning or implementation work
-begins. Per `AGENTS.md`, the next phase does not start merely because the
-previous phase merged.
+**Phase 4 Slice 2 is In Review** (ADR 0014 Accepted 2026-08-17; PR open). No
+Phase 5 implementation is authorised until Slice 2 is merged and ADR 0015 is
+separately accepted. Per `AGENTS.md`, the next phase does not start merely
+because the previous phase merged.
 
-The next action is therefore an owner decision, not engineering work. Three
-boundaries carry forward for that decision:
+Three boundaries carry forward:
 
-1. section-level body-text extraction and validation remain deferred (they
-   require a PDF parsing dependency, which is prohibited without a separate
-   decision);
+1. section body-text was extracted from the official PDF (pdftotext -layout) and
+   is **not yet independently verified**; both real sections remain
+   `verified=false`; Phase 4 does not consume section body-text for drafting and
+   no current Phase 4 path treats these sections as verified drafting evidence;
+   any Phase 5 drafting implementation must independently enforce the
+   verification gate (refusing to use any section with `verified != True`) under
+   its separately authorised scope;
 2. live retrieval, durable WA capture, and production audit storage remain
    deferred to separate owner-approved decisions; and
 3. the recorded fixture is not a live legal-currency service, so an

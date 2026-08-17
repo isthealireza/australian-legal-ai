@@ -244,6 +244,23 @@ class RecordedProvision:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordedSection:
+    """One recorded section body-text record. Untrusted until verified=True.
+
+    `verified=False` is the default and the safety invariant: the pipeline
+    refuses to use any section whose verified flag is not exactly True. Only an
+    independent human verification of the transcription against the official
+    source document may set this to True.
+    """
+
+    identifier: str
+    heading: str | None
+    text: str
+    text_sha256: str
+    verified: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class RecordedWaSource:
     """One recorded WA fixture: raw manifest metadata plus exact content bytes.
 
@@ -268,3 +285,4 @@ class RecordedWaSource:
     retrieved_at: str | None
     sha256: str | None
     source_content: bytes
+    sections: tuple[RecordedSection, ...] = ()
