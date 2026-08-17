@@ -261,6 +261,108 @@ def test_corpus_sections_skips_entry_missing_text_sha256(tmp_path: Path) -> None
     assert source.sections == ()
 
 
+def test_corpus_sections_empty_when_sections_file_is_symlink_inside_root(tmp_path: Path) -> None:
+    content = b"synthetic content"
+    sha256 = hashlib.sha256(content).hexdigest()
+    manifest = {
+        "source_id": "wa_legislation:synthetic:consolidated:1-a0-00",
+        "source_system": "wa_legislation",
+        "jurisdiction": "WA",
+        "act": {"title": "Synthetic Act 1974", "jurisdiction": "WA"},
+        "provisions": [{"identifier": "s 1", "pinpoint": "section 1"}],
+        "version": {"suffix": "1-a0-00", "currency_start": "2025-01-10"},
+        "status": {"currency": "Current", "in_force": True, "status_date": "2025-01-10"},
+        "official_source_url": "https://www.legislation.wa.gov.au/legislation/law_s1.html",
+        "retrieved_at_utc": "2026-08-11T10:27:03Z",
+        "sha256": sha256,
+        "file": "synthetic.pdf",
+    }
+    act_dir = tmp_path / "synthetic"
+    act_dir.mkdir()
+    (act_dir / "synthetic.pdf").write_bytes(content)
+    (act_dir / "synthetic.manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    text = "Section one text."
+    sections_data = {
+        "sections": [
+            {
+                "identifier": "s 1",
+                "text": text,
+                "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
+            }
+        ]
+    }
+    real_file = tmp_path / "real.sections.json"
+    real_file.write_text(json.dumps(sections_data), encoding="utf-8")
+    (act_dir / "synthetic.sections.json").symlink_to(real_file)
+
+    corpus = RecordedWaCorpus(tmp_path)
+    from legal_ai.research.models import ResearchQuery
+
+    source = corpus.select(
+        ResearchQuery(
+            jurisdiction="WA",
+            act_title="Synthetic Act 1974",
+            provision_identifier="s 1",
+            pinpoint="section 1",
+        )
+    )
+
+    assert source is not None
+    assert source.sections == ()
+
+
+def test_corpus_sections_empty_when_sections_file_is_symlink_outside_root(tmp_path: Path) -> None:
+    corpus_root = tmp_path / "corpus"
+    corpus_root.mkdir()
+    content = b"synthetic content"
+    sha256 = hashlib.sha256(content).hexdigest()
+    manifest = {
+        "source_id": "wa_legislation:synthetic:consolidated:1-a0-00",
+        "source_system": "wa_legislation",
+        "jurisdiction": "WA",
+        "act": {"title": "Synthetic Act 1974", "jurisdiction": "WA"},
+        "provisions": [{"identifier": "s 1", "pinpoint": "section 1"}],
+        "version": {"suffix": "1-a0-00", "currency_start": "2025-01-10"},
+        "status": {"currency": "Current", "in_force": True, "status_date": "2025-01-10"},
+        "official_source_url": "https://www.legislation.wa.gov.au/legislation/law_s1.html",
+        "retrieved_at_utc": "2026-08-11T10:27:03Z",
+        "sha256": sha256,
+        "file": "synthetic.pdf",
+    }
+    act_dir = corpus_root / "synthetic"
+    act_dir.mkdir()
+    (act_dir / "synthetic.pdf").write_bytes(content)
+    (act_dir / "synthetic.manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    text = "Section one text."
+    sections_data = {
+        "sections": [
+            {
+                "identifier": "s 1",
+                "text": text,
+                "text_sha256": hashlib.sha256(text.encode()).hexdigest(),
+            }
+        ]
+    }
+    outside_file = tmp_path / "outside.sections.json"
+    outside_file.write_text(json.dumps(sections_data), encoding="utf-8")
+    (act_dir / "synthetic.sections.json").symlink_to(outside_file)
+
+    corpus = RecordedWaCorpus(corpus_root)
+    from legal_ai.research.models import ResearchQuery
+
+    source = corpus.select(
+        ResearchQuery(
+            jurisdiction="WA",
+            act_title="Synthetic Act 1974",
+            provision_identifier="s 1",
+            pinpoint="section 1",
+        )
+    )
+
+    assert source is not None
+    assert source.sections == ()
+
+
 def test_corpus_sections_verified_requires_exact_python_true(tmp_path: Path) -> None:
     text = "Section one text."
     sections_data = {

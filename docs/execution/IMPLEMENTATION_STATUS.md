@@ -204,9 +204,13 @@ because the previous phase merged.
 
 Three boundaries carry forward:
 
-1. section body-text is hand-transcribed and **not yet independently verified**;
-   the pipeline returns `SECTION_TEXT_NOT_VERIFIED` for all real corpus queries
-   against ss 55–56 until human verification is performed and recorded;
+1. section body-text was extracted from the official PDF (pdftotext -layout) and
+   is **not yet independently verified**; both real sections remain
+   `verified=false`; Phase 4 does not consume section body-text for drafting and
+   no current Phase 4 path treats these sections as verified drafting evidence;
+   any Phase 5 drafting implementation must independently enforce the
+   verification gate (refusing to use any section with `verified != True`) under
+   its separately authorised scope;
 2. live retrieval, durable WA capture, and production audit storage remain
    deferred to separate owner-approved decisions; and
 3. the recorded fixture is not a live legal-currency service, so an

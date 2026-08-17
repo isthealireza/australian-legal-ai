@@ -164,13 +164,12 @@ class RecordedWaCorpus:
         if not manifest_path.name.endswith(".manifest.json"):
             return None
         stem = manifest_path.name[: -len(".manifest.json")]
-        candidate = (manifest_path.parent / (stem + ".sections.json")).resolve()
-        if (
-            candidate.is_relative_to(self._root)
-            and not candidate.is_symlink()
-            and candidate.is_file()
-        ):
-            return candidate
+        original = manifest_path.parent / (stem + ".sections.json")
+        if original.is_symlink():
+            return None
+        resolved = original.resolve()
+        if resolved.is_relative_to(self._root) and resolved.is_file():
+            return resolved
         return None
 
     def _load_sections(self, manifest_path: Path) -> tuple[RecordedSection, ...]:

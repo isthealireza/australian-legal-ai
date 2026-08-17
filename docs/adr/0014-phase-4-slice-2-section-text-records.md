@@ -15,9 +15,11 @@ available to a downstream drafting pipeline.
 ADR 0013 §5 explicitly deferred per-section body-text extraction. The deferred
 rationale was that section-level extraction would require a PDF parsing dependency,
 and new dependencies are prohibited under the project's constraints. That rationale
-applied to programmatic extraction. It does not apply to hand-transcription: a
-hand-transcribed body-text record is a durable, version-controlled fixture, not a
-runtime PDF-parsing operation, and introduces no new dependency.
+applied to programmatic runtime extraction. It does not apply to offline extraction
+using the system tool `pdftotext` (poppler-utils): the extracted text is stored in a
+version-controlled fixture file, the extraction is a one-time build-time operation,
+no new Python runtime dependency is introduced, and the result is a durable,
+deterministic record that can be reproduced from the same PDF.
 
 The MVP pipeline (MVP_ROADMAP.md §5) requires that a drafting model be given exact
 statutory text as a grounded evidence input. Without per-section body-text records,
@@ -41,9 +43,13 @@ class RecordedSection:
 ```
 
 `RecordedSection` is untrusted recorded data. The `verified=False` default is the
-safety invariant: the pipeline refuses to use any section whose `verified` flag is
-not exactly `True`. Only an independent human verification of the transcription
-against the official source document may change this field.
+safety invariant. Phase 4 has no downstream consumer of section body-text for
+drafting; no current Phase 4 path treats a section as verified drafting evidence.
+Any Phase 5 drafting implementation that consumes section body-text must
+independently enforce the verification gate — refusing to use any section whose
+`verified` flag is not exactly `True` — under its separately authorised scope.
+Only an independent human verification against the official source document may
+change this field to `True`.
 
 ### 2. Sections field on `RecordedWaSource`
 
@@ -99,16 +105,24 @@ tested parametrically.
 
 ### 6. Recorded body-text: ss 55–56, Road Traffic Act 1974 (WA), version 14-t0-00
 
-Hand-transcribed body text for sections 55 and 56 is recorded in:
+PDF-extracted body text for sections 55 and 56 is recorded in:
 
 ```
 tests/fixtures/wa_legislation/road_traffic_act_1974/
     road_traffic_act_1974_consolidated_14-t0-00.sections.json
 ```
 
-Both sections carry `"verified": false`. The pipeline returns
-`SECTION_TEXT_NOT_VERIFIED` for any real corpus query against these sections
-until an independent human verification is performed and recorded.
+Text was extracted from the official consolidated PDF using `pdftotext -layout`
+(poppler-utils), with page headers/footers removed, trailing whitespace stripped
+per line, and consecutive blank lines collapsed to one. The official HTML version
+(also 14-t0-00) was consulted as a cross-check and is substantively consistent.
+
+Both sections carry `"verified": false`. Phase 4 does not consume section
+body-text for drafting. No current Phase 4 path treats these sections as verified
+drafting evidence. Real drafting against ss 55–56 requires an independent human
+verification of the extracted text against the official source document, recorded
+as `"verified": true` in the sections fixture, under a separately authorised
+Phase 5 scope.
 
 ### 7. No scope beyond this ADR
 
@@ -140,7 +154,7 @@ This slice does **not** add:
   slice is merged and ADR 0015 is accepted, subject to a separate owner
   authorisation.
 - Real drafting against ss 55–56 of the Road Traffic Act 1974 (WA) remains
-  impossible until an independent human verification of the transcription is
+  impossible until an independent human verification of the extracted text is
   performed and recorded as `"verified": true` in the sections fixture.
 - All existing tests continue to pass without modification: no existing builder,
   corpus double, or test creates a `RecordedWaSource` that is broken by the
