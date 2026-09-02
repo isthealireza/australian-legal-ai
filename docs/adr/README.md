@@ -13,3 +13,5 @@ Phase 2 accepts: [0010 Phase 2 playbook framework](0010-phase-2-playbook-framewo
 Governance standardization accepts: [0011 Governance and engineering terminology](0011-governance-and-engineering-terminology.md).
 Phase 3 accepts: [0012 Matter Evidence Vault and Safe Upload Boundary](0012-matter-evidence-vault-and-upload-boundary.md).
 Phase 4 accepts: [0013 Phase 4 Research and Evidence Packets](0013-phase-4-research-evidence-packets.md).
+Phase 5 proposes: [0014 Phase 5 Grounded Answering and the Read-Only Research API](0014-phase-5-grounded-answering-and-read-only-api.md).
+Phase 5 proposes: [0015 Derived provision text, a live provider, and entailment verification](0015-derived-provision-text-live-provider-and-entailment.md).

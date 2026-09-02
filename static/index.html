@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grounded WA Legislation Research Assistant</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Grounded WA Legislation Research Assistant</h1>
+    <p>Read-only research over an indexed corpus of official Western Australian sources.</p>
+  </header>
+
+  <p class="notice" id="disclaimer">
+    This prototype is not a lawyer and does not give legal advice.
+    It answers only questions supported by its currently indexed corpus.
+  </p>
+
+  <form id="form">
+    <div class="grid">
+      <div class="full">
+        <label for="question">Question</label>
+        <input id="question" name="question" required
+               value="What must a driver do after damaging property?">
+      </div>
+      <div>
+        <label for="jurisdiction">Jurisdiction</label>
+        <input id="jurisdiction" name="jurisdiction" required value="WA">
+      </div>
+      <div>
+        <label for="act_title">Act title</label>
+        <input id="act_title" name="act_title" required value="Road Traffic Act 1974">
+      </div>
+      <div>
+        <label for="provision_identifier">Provision identifier</label>
+        <input id="provision_identifier" name="provision_identifier" required value="s 55">
+      </div>
+      <div>
+        <label for="pinpoint">Pinpoint</label>
+        <input id="pinpoint" name="pinpoint" required value="section 55">
+      </div>
+    </div>
+    <button id="submit" type="submit">Research</button>
+  </form>
+
+  <section id="result" aria-live="polite"></section>
+
+  <footer>
+    <p id="status">Checking service status&hellip;</p>
+    <p>
+      Legislative content is sourced from the Western Australian Legislation website
+      and reproduced under CC BY 4.0. Every answer states the exact version and
+      digest of the source it rests on.
+    </p>
+  </footer>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>
