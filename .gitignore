@@ -46,3 +46,6 @@ desktop.ini
 # Local data / scratch
 data/local/
 tmp/
+
+# Local DeepSeek review bundles and validated results
+.deepseek-review/
