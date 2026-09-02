@@ -28,6 +28,7 @@ from ..answering.provisions import (
     NullDerivedProvisionStore,
 )
 from ..answering.service import GroundedAnswerService
+from ..answering.types import AnswerRefusalCode
 from ..answering.verification import EntailmentVerifier, OpenRouterEntailmentVerifier
 from ..research.audit import ResearchAuditSink
 from ..research.corpus import RecordedWaCorpus
@@ -91,6 +92,28 @@ def _resolve_verifier(settings: ApiSettings) -> EntailmentVerifier | None:
     return OpenRouterEntailmentVerifier(config)
 
 
+def _configuration_error(
+    settings: ApiSettings, verifier: EntailmentVerifier | None
+) -> AnswerRefusalCode | None:
+    """Return the refusal code for a configuration that cannot be honoured.
+
+    Entailment verification that was asked for but cannot be built must stop
+    the service, not quietly disappear. Silently answering without a requested
+    safety check is worse than refusing, because the answer looks identical to
+    one that passed the check.
+    """
+
+    if settings.verify_entailment and verifier is None:
+        return AnswerRefusalCode.VERIFIER_NOT_CONFIGURED
+    if settings.answer_model is AnswerModelChoice.OPENROUTER and verifier is None:
+        # Levels 1 and 2 prove a citation points at the retrieved provision and
+        # that any quote is really in it. Neither constrains the *statement*. A
+        # mock adapter cannot invent one; a live generative model can, so it may
+        # not answer legal questions without level 3.
+        return AnswerRefusalCode.ENTAILMENT_REQUIRED_FOR_LIVE_MODEL
+    return None
+
+
 def _answer_service(
     settings: ApiSettings,
     model: LegalAnswerModel,
@@ -127,8 +150,10 @@ def create_app(
     entailment = verifier if verifier is not None else _resolve_verifier(resolved)
 
     app = FastAPI(title=TITLE, summary=SUMMARY, version="0.2.0")
-    service = _answer_service(resolved, answer_model, entailment)
+    config_error = _configuration_error(resolved, entailment)
+    service = None if config_error else _answer_service(resolved, answer_model, entailment)
     app.state.answer_service = service
+    app.state.unavailable_code = config_error or AnswerRefusalCode.CORPUS_UNAVAILABLE
     app.state.corpus_configured = service is not None
     app.state.answer_model_name = getattr(answer_model, "name", type(answer_model).__name__)
     app.state.entailment_verified = entailment is not None

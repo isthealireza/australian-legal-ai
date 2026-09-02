@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from legal_ai.answering.verification import AlwaysSupportedVerifier
 from legal_ai.api.main import create_app
 from legal_ai.api.settings import DISCLAIMER, AnswerModelChoice, ApiSettings
 from tests.research.conftest import RECORDED_ACT_TITLE, RECORDED_FIXTURE_ROOT
@@ -149,3 +150,106 @@ def test_live_model_is_not_selected_without_an_explicit_choice(
     )
     with TestClient(create_app(settings=settings)) as test_client:
         assert test_client.get("/api/health").json()["answer_model"] == "mock"
+
+
+def test_requested_entailment_without_credentials_refuses_every_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A requested safety check that cannot be built must stop the service.
+
+    Reported by the DeepSeek review gate as ENTAILMENT_SILENT_SKIP (high).
+    """
+
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    settings = ApiSettings(
+        corpus_root=RECORDED_FIXTURE_ROOT,
+        audit_log_path=tmp_path / "audit.jsonl",
+        provision_root=RECORDED_FIXTURE_ROOT,
+        verify_entailment=True,
+    )
+    with TestClient(create_app(settings=settings)) as test_client:
+        health = test_client.get("/api/health").json()
+        assert health["corpus_configured"] is False
+        assert health["entailment_verified"] is False
+
+        response = test_client.post("/api/research", json=ANSWERABLE)
+        assert response.status_code == 503
+        body = response.json()
+        assert body["outcome"] == "REFUSED"
+        assert body["code"] == "VERIFIER_NOT_CONFIGURED"
+        assert "propositions" not in body
+
+
+def test_health_reports_a_configured_verifier(tmp_path: Path) -> None:
+    settings = ApiSettings(
+        corpus_root=RECORDED_FIXTURE_ROOT,
+        audit_log_path=tmp_path / "audit.jsonl",
+        provision_root=RECORDED_FIXTURE_ROOT,
+        verify_entailment=True,
+    )
+    app = create_app(settings=settings, verifier=AlwaysSupportedVerifier())
+    with TestClient(app) as test_client:
+        health = test_client.get("/api/health").json()
+        assert health["entailment_verified"] is True
+        assert health["corpus_configured"] is True
+        assert test_client.post("/api/research", json=ANSWERABLE).json()["outcome"] == "ANSWERED"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"question": "x" * 5000},
+        {"question": ""},
+        {"act_title": "y" * 5000},
+        {"pinpoint": "z" * 300},
+    ],
+)
+def test_oversized_or_empty_fields_are_rejected_at_the_boundary(
+    client: TestClient, overrides: dict[str, str]
+) -> None:
+    """Reported by the review gate as UNHANDLED_OVERSIZED_QUESTION_VALIDATION_ERROR.
+
+    An over-long field must be a 422 at the HTTP boundary, never an unhandled
+    validation error raised from inside the pipeline.
+    """
+
+    response = client.post("/api/research", json={**ANSWERABLE, **overrides})
+    assert response.status_code == 422
+
+
+def test_maximum_length_question_is_still_served(client: TestClient) -> None:
+    response = client.post("/api/research", json={**ANSWERABLE, "question": "q" * 4096})
+    assert response.status_code == 200
+    assert response.json()["outcome"] == "ANSWERED"
+
+
+def test_live_model_without_entailment_refuses_every_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reported by the review gate as LIVE_PROVIDER_WITHOUT_ENTAILMENT.
+
+    Levels 1 and 2 constrain the citation, not the statement. A mock cannot
+    invent a statement; a live generative model can, so it may not answer
+    without level 3.
+    """
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "present-but-verification-is-off")
+    settings = ApiSettings(
+        corpus_root=RECORDED_FIXTURE_ROOT,
+        audit_log_path=tmp_path / "audit.jsonl",
+        provision_root=RECORDED_FIXTURE_ROOT,
+        answer_model=AnswerModelChoice.OPENROUTER,
+        verify_entailment=False,
+    )
+    with TestClient(create_app(settings=settings)) as test_client:
+        assert test_client.get("/api/health").json()["corpus_configured"] is False
+        response = test_client.post("/api/research", json=ANSWERABLE)
+        assert response.status_code == 503
+        assert response.json()["code"] == "ENTAILMENT_REQUIRED_FOR_LIVE_MODEL"
+
+
+def test_mock_model_without_entailment_is_permitted(client: TestClient) -> None:
+    """The requirement is specific to a live provider, not to answering at all."""
+
+    assert client.get("/api/health").json()["answer_model"] == "mock"
+    assert client.post("/api/research", json=ANSWERABLE).json()["outcome"] == "ANSWERED"

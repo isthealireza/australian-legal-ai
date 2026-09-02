@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from ..answering.models import GroundedAnswer
 from ..answering.types import AnswerRefusalCode
@@ -12,16 +13,22 @@ from ..answering.types import AnswerRefusalCode
 _STRICT = ConfigDict(extra="forbid", strict=True, frozen=True)
 
 
+#: Bounds mirroring the domain contract, applied at the HTTP boundary so an
+#: over-long field is a 422 rather than an unhandled error deeper in.
+_BoundedText = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=4096)]
+_BoundedIdentifier = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=255)]
+
+
 class ResearchRequestBody(BaseModel):
     """One deterministic research question bound to a specific provision."""
 
     model_config = _STRICT
 
-    question: str
-    jurisdiction: str
-    act_title: str
-    provision_identifier: str
-    pinpoint: str
+    question: _BoundedText
+    jurisdiction: _BoundedIdentifier
+    act_title: _BoundedText
+    provision_identifier: _BoundedIdentifier
+    pinpoint: _BoundedIdentifier
 
 
 class CitationBody(BaseModel):

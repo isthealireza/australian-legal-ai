@@ -21,7 +21,13 @@ from typing import Any
 import httpx
 
 from ..errors import AnswerModelUnavailable
-from ..models import DraftCitation, DraftProposition, GroundedAnswerRequest, ModelDraft
+from ..models import (
+    MAX_PROPOSITIONS,
+    DraftCitation,
+    DraftProposition,
+    GroundedAnswerRequest,
+    ModelDraft,
+)
 
 ENV_API_KEY = "OPENROUTER_API_KEY"
 ENV_MODEL = "LEGAL_AI_OPENROUTER_MODEL"
@@ -98,6 +104,11 @@ def _parse_propositions(content: str) -> list[dict[str, Any]]:
     raw = payload.get("propositions")
     if not isinstance(raw, list):
         raise AnswerModelUnavailable("provider response has no propositions list")
+    # Bound the work before building anything. A compromised or prompt-induced
+    # provider response could otherwise carry an unbounded list, and the
+    # downstream validator would only reject it after the memory was spent.
+    if len(raw) > MAX_PROPOSITIONS:
+        raise AnswerModelUnavailable("provider returned more propositions than are permitted")
     return [item for item in raw if isinstance(item, dict)]
 
 

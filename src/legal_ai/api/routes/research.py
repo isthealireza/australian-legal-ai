@@ -21,9 +21,15 @@ from ..settings import DISCLAIMER
 router = APIRouter(tags=["research"])
 
 #: A refusal is a successful, correct outcome of the contract, not a client
-#: error, so it is returned as 200 with an explicit REFUSED outcome. Only an
-#: unconfigured corpus is reported as a server-side unavailability.
-_UNAVAILABLE = frozenset({AnswerRefusalCode.CORPUS_UNAVAILABLE})
+#: error, so it is returned as 200 with an explicit REFUSED outcome. Only a
+#: service that cannot be configured is a server-side unavailability.
+_UNAVAILABLE = frozenset(
+    {
+        AnswerRefusalCode.CORPUS_UNAVAILABLE,
+        AnswerRefusalCode.VERIFIER_NOT_CONFIGURED,
+        AnswerRefusalCode.ENTAILMENT_REQUIRED_FOR_LIVE_MODEL,
+    }
+)
 
 
 @router.post("/api/research", response_model=None)
@@ -35,7 +41,10 @@ def research(
     service = request.app.state.answer_service
     if not isinstance(service, GroundedAnswerService):
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        return RefusalBody(disclaimer=DISCLAIMER, code=AnswerRefusalCode.CORPUS_UNAVAILABLE)
+        return RefusalBody(
+            disclaimer=DISCLAIMER,
+            code=AnswerRefusalCode(request.app.state.unavailable_code),
+        )
 
     try:
         query = ResearchQuery(

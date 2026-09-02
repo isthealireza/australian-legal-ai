@@ -257,15 +257,51 @@ def redact_secrets(value: str) -> str:
     patterns = (
         (r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{12,}", r"\1[REDACTED]"),
         (
-            r"(?i)(-----BEGIN [^-]*PRIVATE KEY-----).*?(-----END [^-]*PRIVATE KEY-----)",
+            # (?s) is essential: a PEM key is always multi-line, so without
+            # DOTALL this pattern never matches and the key passes through.
+            r"(?is)(-----BEGIN [^-]*PRIVATE KEY-----).*?(-----END [^-]*PRIVATE KEY-----)",
             r"\1[REDACTED]\2",
         ),
         (
-            r"(?i)(?:sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{20,})",
+            r"(?i)(?:sk-or-v1-[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{20,})",
             "[REDACTED]",
         ),
         (
-            r"(?im)(\b(?:DEEPSEEK_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|AWS_SECRET_ACCESS_KEY|SECRET_KEY|PASSWORD|TOKEN)\b\s*[:=]\s*)([^\s#,'\"`]+)",
+            # Case-SENSITIVE and upper-case only, deliberately. A
+            # case-insensitive match here also rewrites ordinary identifiers
+            # such as `api_key: str` and `self._config.api_key`, which corrupts
+            # the very diff being reviewed.
+            # The negative lookahead keeps a quoted UPPER_SNAKE literal, which
+            # is an environment-variable *name* rather than a credential.
+            # Redacting it would hide which variable the change reads.
+            r"(?m)(\b(?:[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_API_KEY|API_KEY|SECRET_KEY"
+            r"|AWS_SECRET_ACCESS_KEY|PASSWORD|TOKEN)\b\s*[:=]\s*)"
+            r"(?!['\"][A-Z][A-Z0-9_]*['\"]\s*$)([^\s#,'\"`]+)",
+            r"\1[REDACTED]",
+        ),
+        (
+            # Lower-case assignments are matched on the *value* rather than the
+            # name: only a quoted literal long enough to be a credential is
+            # redacted. That catches `api_key = "sk-..."` without touching
+            # `api_key: str` or `self._config.api_key`, which is the balance
+            # the two competing review findings require.
+            r"(?i)(\b\w*(?:api_key|apikey|secret|password|passwd|token|credential)\w*"
+            # The exclusion is scoped case-SENSITIVE with (?-i:...): the outer
+            # (?i) would otherwise let a lower-case secret match the
+            # UPPER_SNAKE name exclusion and escape redaction entirely.
+            r"\s*[:=]\s*)(?!(?-i:['\"][A-Z][A-Z0-9_]*['\"]))((['\"])[^'\"\n]{12,}\3)",
+            r"\1[REDACTED]",
+        ),
+        (
+            # Unquoted lower-case assignment, e.g. `api_key=sk-live-abc...` in
+            # an env file. The value must carry a character that cannot appear
+            # in a Python identifier or attribute path, which is what keeps
+            # `api_key = config.api_key` and `token = parse(value)` intact. An
+            # unquoted value that is a bare identifier-shaped word remains
+            # indistinguishable from ordinary code and is not matched here; the
+            # token-shape pattern above is the backstop for real key formats.
+            r"(?i)(\b\w*(?:api_key|apikey|secret|password|passwd|token|credential)\w*\s*[:=]\s*)"
+            r"([A-Za-z0-9_.~]*[-+/=][A-Za-z0-9_.~\-+/=]{11,})",
             r"\1[REDACTED]",
         ),
     )
@@ -512,12 +548,14 @@ class ReviewTool:
         if normalized.startswith(f"{RUNTIME_OUTPUT_DIR}/") and not allow_runtime_output:
             raise PolicyError(f"runtime output is not a review input: {value}")
         full_path = self._full_path(normalized)
-        if (
-            full_path.exists()
-            and full_path.is_symlink()
-            and not self._is_inside(full_path.resolve())
+        # No symlink is a review input, even one resolving inside the
+        # repository: a tracked link can present an innocuous path while
+        # pointing at .env.local or .git/config, so the operator cannot tell
+        # from the allowlist what would actually be transmitted.
+        if full_path.is_symlink() or any(
+            parent.is_symlink() for parent in full_path.parents if self._is_inside(parent)
         ):
-            raise PolicyError(f"symlink outside the repository is not permitted: {value}")
+            raise PolicyError(f"symlink is not permitted as a review input: {value}")
         return normalized
 
     def _full_path(self, relative: str) -> Path:

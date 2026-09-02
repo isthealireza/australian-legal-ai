@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from legal_ai.answering.errors import AnswerModelUnavailable
-from legal_ai.answering.models import GroundedAnswerRequest
+from legal_ai.answering.models import MAX_PROPOSITIONS, GroundedAnswerRequest
 from legal_ai.answering.providers.openrouter import (
     OpenRouterAnswerModel,
     OpenRouterConfig,
@@ -157,3 +157,21 @@ def test_config_requires_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
     config = load_openrouter_config()
     assert config is not None
     assert config.model == "deepseek/deepseek-chat"
+
+
+def test_unbounded_proposition_list_is_rejected() -> None:
+    """Reported by the review gate as UNBOUNDED_MODEL_PROPOSITION_COUNT.
+
+    The count is bounded before anything is constructed, so a hostile or
+    runaway provider response cannot force unbounded work.
+    """
+
+    flood = {"propositions": [{"statement": "s", "quote": None}] * (MAX_PROPOSITIONS + 1)}
+    with pytest.raises(AnswerModelUnavailable):
+        _model(json.dumps(flood)).answer(_request())
+
+
+def test_proposition_list_at_the_limit_is_accepted() -> None:
+    at_limit = {"propositions": [{"statement": "s", "quote": None}] * MAX_PROPOSITIONS}
+    draft = _model(json.dumps(at_limit)).answer(_request())
+    assert len(draft.propositions) == MAX_PROPOSITIONS

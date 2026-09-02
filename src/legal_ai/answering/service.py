@@ -111,8 +111,13 @@ class GroundedAnswerService:
         """
 
         verifier = self._verifier
-        if verifier is None or provision is None:
+        if verifier is None:
             return None
+        if provision is None:
+            # A configured verifier with nothing to verify against has not
+            # verified anything. Skipping here would return an answer that is
+            # indistinguishable from one that passed level 3.
+            return AnswerRefusalCode.ENTAILMENT_UNAVAILABLE
 
         def grade(proposition: Proposition) -> bool:
             return verifier.verify(
@@ -144,7 +149,33 @@ class GroundedAnswerService:
     ) -> ModelDraft | AnswerRefusalCode:
         """Make the single model call, converting every failure into a refusal."""
 
-        model_request = GroundedAnswerRequest(
+        try:
+            model_request = self._build_request(question, packet, provision)
+        except Exception:
+            # A request that cannot even be constructed is refused, never
+            # raised out of the pipeline as an unhandled error.
+            return AnswerRefusalCode.MODEL_OUTPUT_MALFORMED
+        try:
+            draft = self._model.answer(model_request)
+        except AnswerModelUnavailable:
+            return AnswerRefusalCode.MODEL_UNAVAILABLE
+        except Exception:
+            # Deliberately broad: any adapter fault at all is fail-closed, and
+            # never degrades into an uncited or model-memory answer.
+            return AnswerRefusalCode.MODEL_UNAVAILABLE
+        if not isinstance(draft, ModelDraft):
+            return AnswerRefusalCode.MODEL_OUTPUT_MALFORMED
+        return draft
+
+    @staticmethod
+    def _build_request(
+        question: str,
+        packet: WaEvidencePacket,
+        provision: DerivedProvision | None,
+    ) -> GroundedAnswerRequest:
+        """Assemble the exact material the model is allowed to see."""
+
+        return GroundedAnswerRequest(
             question=question,
             source_id=packet.source_id,
             act_title=packet.act.title,
@@ -159,14 +190,3 @@ class GroundedAnswerService:
             provision_text=provision.text if provision is not None else None,
             provision_sha256=provision.sha256 if provision is not None else None,
         )
-        try:
-            draft = self._model.answer(model_request)
-        except AnswerModelUnavailable:
-            return AnswerRefusalCode.MODEL_UNAVAILABLE
-        except Exception:
-            # Deliberately broad: any adapter fault at all is fail-closed, and
-            # never degrades into an uncited or model-memory answer.
-            return AnswerRefusalCode.MODEL_UNAVAILABLE
-        if not isinstance(draft, ModelDraft):
-            return AnswerRefusalCode.MODEL_OUTPUT_MALFORMED
-        return draft

@@ -7,6 +7,16 @@ const submit = document.getElementById("submit");
 const result = document.getElementById("result");
 const statusLine = document.getElementById("status");
 
+/** True only for an http(s) URL, so no other scheme can become an href. */
+function isSafeHttpUrl(value) {
+  try {
+    const parsed = new URL(String(value));
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch (error) {
+    return false;
+  }
+}
+
 /** Build an element with text content, avoiding any HTML interpolation. */
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -28,12 +38,18 @@ function citation(cite) {
   for (const [term, value] of rows) {
     dl.append(el("dt", null, term), el("dd", null, String(value)));
   }
-  const link = el("a", null, cite.official_source_url);
-  link.href = cite.official_source_url;
-  link.rel = "noopener noreferrer";
-  link.target = "_blank";
+  // The server only ever emits an allowlisted HTTPS legislation URL, but the
+  // scheme is re-checked here so nothing else could ever become a live href.
   const dd = el("dd");
-  dd.append(link);
+  if (isSafeHttpUrl(cite.official_source_url)) {
+    const link = el("a", null, cite.official_source_url);
+    link.href = cite.official_source_url;
+    link.rel = "noopener noreferrer";
+    link.target = "_blank";
+    dd.append(link);
+  } else {
+    dd.append(el("span", null, `${cite.official_source_url} (link withheld)`));
+  }
   dl.append(el("dt", null, "Source"), dd);
   wrap.append(dl);
   if (cite.quote) {
