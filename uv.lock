@@ -102,7 +102,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4,<3.4" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
-    { name = "pypdf", specifier = ">=6.16.2" },
+    { name = "pypdf", specifier = ">=6.16.2,<7" },
     { name = "sqlalchemy", specifier = ">=2.0.51,<2.1" },
     { name = "uvicorn", specifier = ">=0.38.0,<0.39" },
 ]
