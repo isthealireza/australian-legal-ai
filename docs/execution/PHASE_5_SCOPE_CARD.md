@@ -22,7 +22,7 @@ explicit refusal.
 | `src/legal_ai/api/` | FastAPI factory, settings, schemas, health and research routes |
 | `static/` | Single-page interface with the required permanent notices |
 | `scripts/derive_wa_provisions.py` | Operator tool deriving provision text from the verified PDF |
-| `tests/answering/`, `tests/api/` | 76 unit and HTTP contract tests |
+| `tests/answering/`, `tests/api/` | 99 unit and HTTP contract tests |
 | `docs/adr/0014-*.md`, `docs/adr/0015-*.md` | Decision records |
 
 ## Out of scope — deliberately not done
@@ -91,8 +91,10 @@ uv run --locked python scripts/derive_wa_provisions.py \
 
 ## External review gate
 
-The DeepSeek review gate ran seven times and returned `BLOCKED` each time. Eighteen
-findings in total, all accepted and fixed with tests:
+The gate was invoked nine times. It returned `BLOCKED` on the first eight and
+`PASS` on the merge candidate. Twenty-four findings were remediated with tests
+along the way; the eighteen from the entangled rounds are listed here, and the
+later ones are in the ADR 0015 addenda 7 to 12.
 
 | Round | Finding | Severity |
 |---|---|---|
@@ -114,9 +116,6 @@ findings in total, all accepted and fixed with tests:
 | 7 | `SEC-UNBOUNDED_PROVIDER_RESPONSE` | high |
 | 7 | `SEC-REDACTION_BARE_IDENTIFIER_GAP` | high |
 | 7 | `OPS-AUDIT_SINK_STARTUP_FAILURE` | medium |
-
-Details in the ADR 0015 addenda. **The gate has not yet returned a
-non-blocking verdict, so this branch is not ready to merge.**
 
 ### Review outcome
 
