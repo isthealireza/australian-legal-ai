@@ -505,3 +505,39 @@ uses the same vendor as the answer model; the API has no authentication or rate
 limiting and must not be network-exposed as it stands; derived text is a
 transformation of the official PDF; and the pilot corpus is two provisions of
 one Act, so most real questions refuse.
+
+## Addendum 12 — final verdict (2026-09-02)
+
+**`PASS`.** No critical, high, or medium findings. The reviewer's summary
+records the pipeline as fail-closed, with deterministic citation validation,
+bounded provider responses, digest-chained provision text, and mandatory
+entailment for live providers.
+
+Two low-severity findings remain open and are accepted rather than fixed:
+
+- **`SEC-OPENROUTER_BASE_URL_PRIVATE_HOST`.** The validated base URL is not
+  additionally checked against private or loopback address ranges. Both
+  reachable configurations are operator-set environment variables on the
+  operator's own machine, and an operator who can set the base URL can already
+  point the process anywhere. Blocking private ranges would also break the
+  legitimate case of a self-hosted gateway on a private network.
+- **`SEC-STATIC_INDEX_SYMLINK_UNCHECKED`.** `index.html` inside an
+  operator-configured static directory is not itself symlink-checked, though
+  the directory now is. The file is served as static content to a localhost
+  interface at authority level L0, and the operator controls the directory.
+
+Both are recorded here so the decision is visible rather than implicit. Neither
+is a fail-open in the answering path: no route from a question to an answer is
+affected by either.
+
+### Closing position
+
+Nine gate invocations, twenty-six findings, all but these two remediated. The
+Phase 5 deliverable passes. The review-gate repair is on
+`chore/deepseek-review-gate-repair` and remains `BLOCKED` on findings confined
+to that tooling; it must be reviewed and merged on its own terms.
+
+Two items still require the owner rather than further engineering: accepting
+ADR 0014 and ADR 0015, which are `Proposed`, and deciding whether the two low
+findings above are genuinely acceptable. `AGENTS.md` reserves merge for the
+owner's explicit instruction, so nothing is merged and nothing is pushed.

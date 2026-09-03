@@ -3,7 +3,7 @@
 **Branch:** `feat/phase-5-grounded-answer-api`
 **Governing decisions:** [ADR 0014](../adr/0014-phase-5-grounded-answering-and-read-only-api.md) · [ADR 0015](../adr/0015-derived-provision-text-live-provider-and-entailment.md) (both Proposed)
 **Authority level:** L0 — deterministic, read-only
-**Status:** implemented, validated, and **PASSED** by the external review gate
+**Status:** implemented, validated, **PASSED** by the external review gate; awaiting ADR acceptance and an explicit merge instruction
 
 ## Goal
 
@@ -126,8 +126,12 @@ closed rather than carried — see the ADR 0015 addendum 11. The reviewer record
 that the pipeline is fail-closed, citations are deterministically validated,
 provider responses are bounded, and audit-sink failure stops the service.
 
-Reaching that verdict took eight rounds and twenty remediated findings, recorded
-in the ADR 0015 addenda. It also required separating two tasks that had become
+Two low-severity findings remain open and accepted, both concerning
+operator-set local configuration and neither affecting the answering path; see
+the ADR 0015 addendum 12.
+
+Reaching that verdict took nine gate invocations and twenty-four remediated
+findings, recorded in the ADR 0015 addenda. It also required separating two tasks that had become
 entangled: the review-gate repair now lives on `chore/deepseek-review-gate-repair`
 and is **still BLOCKED**, on findings confined to the gate script itself. That
 branch must not be merged on this branch's verdict.
