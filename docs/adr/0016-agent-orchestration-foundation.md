@@ -1,0 +1,140 @@
+# ADR 0016: Agent Orchestration Foundation
+
+- Status: Proposed
+- Date: 2026-09-03
+- Accepted: not yet accepted — owner authorisation required before merge
+- Builds on: [ADR 0011](0011-governance-and-engineering-terminology.md)
+- Governed by: `PROJECT_GOVERNANCE.md` §9, `ENGINEERING_WORKFLOW.md` §1–4
+
+## Context
+
+More than one agent now works on this repository. Claude Code owns
+implementation and coordination; Codex acts as a review worker; OpenCode running
+DeepSeek acts as an evaluation worker. Coordination happens through Orca
+orchestration Runs, Tasks and Dispatches.
+
+That arrangement was working, but nothing in the repository described it. The
+rules that keep it safe — one bounded task per contributor, two contributors
+never holding write access to the same files, workers being review-only unless
+a task names the exact files, worker output being untrusted until checked —
+lived only in prose in `PROJECT_GOVERNANCE.md` and `ENGINEERING_WORKFLOW.md`,
+and in whichever prompt happened to be typed that day.
+
+Prose cannot fail closed. A rule that is not executable is a rule that is
+followed only when someone remembers it.
+
+`docs/execution/MVP_ROADMAP.md` §5 lists "multi-agent orchestration" under
+**Not now**. That entry is about the *product*: it forbids the legal-answering
+system from becoming a multi-agent runtime. This ADR does not touch it. What is
+described here is a repository engineering-governance module, imported by
+nothing in the answering pipeline or the HTTP API.
+
+## Decision
+
+### 1. A bounded task contract is a type, not a paragraph
+
+`BoundedTaskContract` carries the fields `ENGINEERING_WORKFLOW.md` §1 already
+requires — objective, in-scope and out-of-scope, acceptance criteria, rollback
+instructions — plus the ones that make it enforceable: the role it authorises,
+its access mode, and the exact repository-relative file allowlist. A contract
+with no acceptance criteria cannot be constructed.
+
+Two limits are enforced at construction:
+
+- `authority_level` may not exceed **L1**. Coordinating engineering work is
+  read-only research or an internal reversible action. A contract cannot quietly
+  become the vehicle for an L2+ action.
+- `granted_product_capabilities` must be empty. `ProductCapability` — shell,
+  browser, email, unrestricted network, unrestricted filesystem, persistent
+  memory, self-modification, Contract Builder — is a deny list, and naming any
+  member is a construction error. This restates `ENGINEERING_WORKFLOW.md` §13
+  and `PROJECT_GOVERNANCE.md` §7 as code.
+
+### 2. Write access is denied by default and never widens implicitly
+
+Every role's default configuration is `READ_ONLY` or `REVIEW_ONLY` with an empty
+allowlist, including the coordinator's. A role writes only when a contract sets
+`SCOPED_WRITE` *and* names the exact path.
+
+The allowlist holds canonical repository-relative paths and is compared by exact
+match. There are no globs and no prefix rules, so allowlisting
+`docs/adr/0016-agent-orchestration-foundation.md` does not allowlist
+`docs/adr/`. Absolute paths, drive letters, backslashes and `..` traversal are
+rejected during normalisation rather than normalised away, so an allowlist
+cannot be defeated by spelling.
+
+This is the executable form of `PROJECT_GOVERNANCE.md` §9.3: two contributors
+never hold simultaneous write access to the same files.
+
+### 3. Task state transitions are total and deterministic
+
+`TaskState` mirrors the Orca task statuses, so a node in this module and the
+Orca task row it corresponds to cannot disagree. Every edge is enumerated; an
+unknown state has no outgoing edges and therefore fails closed. Two guards
+apply: a task reaches `READY` only when every dependency has completed, and a
+`FAILED` task re-enters `READY` only while its bounded retry allowance remains.
+`COMPLETED` is terminal.
+
+### 4. Worker messages and results are untrusted data
+
+`WorkerMessage` and `WorkerResult` are the schemas for what comes back through
+Orca. They are treated exactly as retrieved content is treated under
+`PROJECT_GOVERNANCE.md` §6: data, never instruction.
+
+`validate_worker_result` is the only way to obtain an `AcceptedWorkerResult`, so
+holding one is proof the check ran. It rejects a result naming another task, a
+result claiming a role its contract did not grant, a read-only or review-only
+worker that reports having modified anything, and any modified path outside the
+contract's allowlist. A `FAILED` outcome is validated on the same terms — a
+worker cannot escape its file scope by reporting failure.
+
+### 5. The DAG is bounded and its order is stable
+
+`build_task_graph` validates unique ids, resolvable dependencies, and acyclicity
+at construction, and caps the graph at 32 tasks: a bounded slice has a bounded
+plan, and a larger one is a scope change requiring owner approval. Ordering uses
+Kahn's algorithm over lexicographically sorted ids, so the same set of contracts
+always produces the same order. `ready_task_ids` requires a state map covering
+exactly the graph, so a missing or stray state is an error rather than a silent
+`False`.
+
+### 6. The autonomy boundary is recorded, not remembered
+
+`approvals.py` records the owner decision of 2026-09-03. Routine engineering —
+task decomposition, worker dispatch, read-only review, test execution, bounded
+retries, deterministic validation, in-scope documentation, integrating worker
+findings — proceeds without pausing. Seven protected decisions never become
+automatic: scope change, governance/security/grounding/fail-closed/privacy
+control change, real client data or secrets, external publication or deployment,
+merge to a protected branch, legal-content acceptance, and any action with
+material external side effects.
+
+`requires_owner_approval` fails closed: an activity it does not recognise is
+protected, not autonomous.
+
+## Consequences
+
+**Kept.** Fail-closed legal grounding, deterministic citation and provenance,
+entailment verification, the permanent disclaimer and the audit controls are
+untouched — no file in `answering/`, `research/`, `api/`, `casework/`,
+`evidence/`, `playbooks/`, `provenance/`, `legislation/`, `parsing/`, `db/` or
+`sources/` changes, and no existing test changes. The HTTP API behaves
+identically because nothing imports this package.
+
+**Gained.** The rules that keep multi-agent work safe are now executable and
+tested, so violating one is a raised exception rather than a missed paragraph.
+
+**Cost.** The module describes coordination; it does not perform it. Orca
+remains the transport, and nothing here calls the Orca CLI or any network. A
+future slice could bind the two, but that binding is not authorised here.
+
+**Deliberately excluded.** Contract Builder. Any product-model tool. Database
+persistence of orchestration state. Authentication. Corpus expansion. Any
+change to Phase 0–5 behaviour. Any L2+ authority. Pushing, merging or tagging.
+
+## Rollback
+
+Delete `src/legal_ai/orchestration/`, `tests/orchestration/`, this ADR and
+`docs/execution/ORCHESTRATION_FOUNDATION_SCOPE_CARD.md`. No other file changes,
+no migration runs, and no existing behaviour depends on the package, so removal
+is complete and leaves no residue.
