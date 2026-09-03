@@ -471,3 +471,37 @@ the fixed code from the broken code.
 
 This finding is a good argument for the whole loop: it corrected a fix that
 looked right, passed its own tests, and did not hold.
+
+## Addendum 11 — PASS, and the residual hardening closed (2026-09-02)
+
+The gate returned **`PASS`** on the separated Phase 5 branch: no critical or
+high findings, with the pipeline recorded as fail-closed, citations
+deterministically validated, provider responses bounded, and audit-sink failure
+stopping the service.
+
+Four non-blocking findings accompanied the pass, and all four are now closed
+rather than carried:
+
+- **`SEC-OPENROUTER_BASE_URL_UNVALIDATED` (medium).** `LEGAL_AI_OPENROUTER_BASE_URL`
+  was used unvalidated, so a misconfigured `http://` or attacker-supplied host
+  would have carried the bearer token in cleartext. The URL must now be HTTPS
+  with a host and no embedded credentials, and an invalid value refuses the
+  configuration rather than silently falling back to the default — the operator
+  asked for something specific and it cannot be honoured.
+- **`SEC-PYPDF_UNBOUNDED_DEPENDENCY` (low).** `pypdf` now carries an upper
+  bound like every other dependency.
+- **`OPS-DERIVE_SCRIPT_PATH_TRAVERSAL` (low).** The operator tool took the PDF
+  filename from the recorded manifest without containment checks. Manifest
+  content is untrusted data, so the filename must now be a plain basename
+  resolving inside the fixture directory and must not be a symlink.
+- **`SEC-STATIC_DIR_SYMLINK_UNCHECKED` (low).** A symlinked `LEGAL_AI_STATIC_DIR`
+  is refused, so what is served is what the operator sees at the configured path.
+
+Re-deriving the provision fixtures after the containment change produced
+byte-identical text, confirming the tool's behaviour is unchanged.
+
+The gate's recorded `scope_risks` are unchanged and remain accurate: level 3
+uses the same vendor as the answer model; the API has no authentication or rate
+limiting and must not be network-exposed as it stands; derived text is a
+transformation of the official PDF; and the pilot corpus is two provisions of
+one Act, so most real questions refuse.

@@ -155,7 +155,14 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"expected exactly one source manifest in {directory}")
     source = json.loads(manifests[0].read_text(encoding="utf-8"))
 
-    pdf_path = directory / str(source["file"])
+    # The manifest is recorded data, so its filename is not trusted to stay
+    # inside the fixture directory.
+    filename = str(source["file"])
+    if not filename.strip() or Path(filename).name != filename:
+        raise SystemExit("recorded content filename must be a plain basename")
+    pdf_path = (directory / filename).resolve()
+    if not pdf_path.is_relative_to(directory) or pdf_path.is_symlink():
+        raise SystemExit("recorded content file must be a regular file inside the fixture root")
     actual = hashlib.sha256(pdf_path.read_bytes()).hexdigest()
     if actual != source["sha256"]:
         raise SystemExit("parent source digest does not match its manifest; refusing to derive")

@@ -257,3 +257,43 @@ class _Stream(httpx.SyncByteStream):
 
     def __iter__(self) -> Iterator[bytes]:
         yield from self._chunks
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://openrouter.ai/api/v1",
+        "https://user:pass@openrouter.ai/api/v1",
+        "ftp://openrouter.ai/api/v1",
+        "not a url",
+        "https:///nohost",
+    ],
+)
+def test_unsafe_base_url_refuses_configuration(
+    base_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reported by the review gate as SEC-OPENROUTER_BASE_URL_UNVALIDATED.
+
+    The bearer token rides on every request, so a cleartext or malformed
+    endpoint must refuse rather than silently fall back to the default.
+    """
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setenv("LEGAL_AI_OPENROUTER_BASE_URL", base_url)
+    assert load_openrouter_config() is None
+
+
+def test_https_base_url_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setenv("LEGAL_AI_OPENROUTER_BASE_URL", "https://gateway.example.com/v1/")
+    config = load_openrouter_config()
+    assert config is not None
+    assert config.base_url == "https://gateway.example.com/v1"
+
+
+def test_unset_base_url_uses_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.delenv("LEGAL_AI_OPENROUTER_BASE_URL", raising=False)
+    config = load_openrouter_config()
+    assert config is not None
+    assert config.base_url == "https://openrouter.ai/api/v1"

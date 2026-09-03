@@ -276,3 +276,24 @@ def test_unwritable_audit_log_stops_the_service_without_crashing(tmp_path: Path)
         response = test_client.post("/api/research", json=ANSWERABLE)
         assert response.status_code == 503
         assert response.json()["code"] == "AUDIT_SINK_NOT_WRITABLE"
+
+
+def test_symlinked_static_dir_is_not_served(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reported by the review gate as SEC-STATIC_DIR_SYMLINK_UNCHECKED."""
+
+    real = tmp_path / "real_static"
+    real.mkdir()
+    (real / "index.html").write_text("<p>served</p>", encoding="utf-8")
+    link = tmp_path / "linked_static"
+    try:
+        link.symlink_to(real, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation is not permitted in this environment")
+
+    monkeypatch.setenv("LEGAL_AI_STATIC_DIR", str(link))
+    settings = ApiSettings(corpus_root=None, audit_log_path=None)
+    with TestClient(create_app(settings=settings)) as test_client:
+        assert test_client.get("/").status_code == 404
+        assert test_client.get("/api/health").status_code == 200

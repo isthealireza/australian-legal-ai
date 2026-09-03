@@ -17,6 +17,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -81,16 +82,51 @@ class OpenRouterConfig:
     base_url: str
 
 
+def _validated_base_url(raw: str) -> str | None:
+    """Return an HTTPS base URL, or None if it is not one.
+
+    The bearer token travels on every request, so a base URL that is cleartext
+    or malformed is refused rather than used. A misconfigured environment
+    variable must not become a credential leak.
+    """
+
+    if not raw:
+        return DEFAULT_BASE_URL
+    if raw != raw.strip() or any(ord(character) < 32 for character in raw):
+        return None
+    try:
+        parsed = urlsplit(raw)
+        port = parsed.port
+    except ValueError:
+        return None
+    if parsed.scheme != "https" or not parsed.hostname:
+        return None
+    if (
+        parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    del port
+    return raw.rstrip("/")
+
+
 def load_openrouter_config() -> OpenRouterConfig | None:
     """Read provider configuration from the environment, or return None."""
 
     api_key = os.environ.get(ENV_API_KEY, "").strip()
     if not api_key:
         return None
+    base_url = _validated_base_url(os.environ.get(ENV_BASE_URL, "").strip())
+    if base_url is None:
+        # A misconfigured endpoint is a refusal, not a fallback to the default:
+        # the operator asked for something specific and it cannot be honoured.
+        return None
     return OpenRouterConfig(
         api_key=api_key,
         model=os.environ.get(ENV_MODEL, "").strip() or DEFAULT_MODEL,
-        base_url=os.environ.get(ENV_BASE_URL, "").strip() or DEFAULT_BASE_URL,
+        base_url=base_url,
     )
 
 

@@ -54,7 +54,7 @@ real client data · any L1+ authority · any change to a Phase 0–4 module.
 uv run ruff check .          # passes, excluding untracked scripts/wf5_structural_lint.py
 uv run ruff format --check . # passes, same exclusion
 uv run mypy .                # passes, same exclusion
-uv run pytest -m "not integration"   # 974 passed, 46 skipped
+uv run pytest -m "not integration"   # 984 passed, 47 skipped
 ```
 
 The exclusion is a pre-existing untracked local file outside this task's scope.
@@ -120,7 +120,9 @@ non-blocking verdict, so this branch is not ready to merge.**
 
 ### Review outcome
 
-**`PASS`** on 2026-09-02. No critical or high findings. The reviewer recorded
+**`PASS`** on 2026-09-02. No critical or high findings. The four
+non-blocking findings that accompanied the pass (one medium, three low) were
+closed rather than carried — see the ADR 0015 addendum 11. The reviewer recorded
 that the pipeline is fail-closed, citations are deterministically validated,
 provider responses are bounded, and audit-sink failure stops the service.
 

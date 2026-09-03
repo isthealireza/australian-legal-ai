@@ -49,7 +49,11 @@ def _static_dir() -> Path | None:
     override = os.environ.get(ENV_STATIC_DIR, "").strip()
     if override:
         candidate = Path(override)
-        return candidate if candidate.is_dir() else None
+        # A symlinked interface directory is refused: what is served should be
+        # what the operator can see at the configured path.
+        if candidate.is_symlink() or not candidate.is_dir():
+            return None
+        return candidate
     bundled = Path(__file__).resolve().parents[3] / "static"
     return bundled if bundled.is_dir() else None
 
