@@ -46,18 +46,30 @@ def section_text_digest(text: str) -> str:
 
 
 class VerifiedSection(BaseModel):
-    """Section body text that has passed every check in this module.
+    """Section body text returned by `verify_section`.
 
-    Holding one is proof the checks ran, and that holds however it was built.
-    The `verified` flag and the digest are re-checked in the model validator, so
-    constructing this type directly or through `model_validate` re-runs them and
-    raises rather than producing an unverified value.
+    Be precise about what this type proves, because an overclaim here would be
+    worse than no claim at all.
 
-    Two caveats are Pydantic's, not this module's. Neither `model_copy` nor
-    `model_construct` runs validators — `model_construct` is a documented
-    validation bypass — so a value produced by either is only as trustworthy as
-    what was fed to it. Both are pinned by tests so the limit stays visible.
-    Treat `verify_section` as the only construction path in real code.
+    **Self-evident, on every instance however built.** The text matches
+    `text_sha256`. The model validator recomputes it, so direct construction and
+    `model_validate` both raise on a mismatch.
+
+    **Not self-evident.** That the companion file was bound to this document,
+    that the manifest declares this identifier, and that a human set `verified`
+    to exactly `True`. None of those three are properties of the fields carried
+    here — `verified` and the binding belong to the source, not the section — so
+    they cannot be re-derived from an instance. They are proven only by having
+    come from `verify_section`, which is why it is the sanctioned constructor
+    and why a hand-built instance means strictly less than one it returned.
+
+    **Two Pydantic bypasses.** Neither `model_copy` nor `model_construct` runs
+    validators; `model_construct` is a documented validation bypass, so it can
+    produce an instance whose digest does not match at all. Both are pinned by
+    tests so the limit stays visible rather than being assumed away.
+
+    A future consumer must therefore accept these only from `verify_section` and
+    must not treat the type alone as authority.
     """
 
     model_config = _STRICT
