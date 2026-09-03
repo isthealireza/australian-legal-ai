@@ -1,0 +1,44 @@
+{
+  "source_id": "wa_legislation:road_traffic_vehicles_regulations_2014:consolidated:01-at0-00",
+  "source_system": "wa_legislation",
+  "jurisdiction": "WA",
+  "act": {
+    "title": "Road Traffic (Vehicles) Regulations 2014",
+    "jurisdiction": "WA"
+  },
+  "provisions": [],
+  "version": {
+    "type": "consolidated",
+    "official_version": true,
+    "suffix": "01-at0-00",
+    "document_id": "mrdoc_49702",
+    "version_label": "Road Traffic (Vehicles) Regulations 2014 - [01-at0-00]",
+    "currency_start": "2026-07-01",
+    "currency_end": "current"
+  },
+  "status": {
+    "in_force": true,
+    "currency": "Current",
+    "status_date": "2026-07-01",
+    "source_statement": "Currency start 1 Jul 2026; Currency end: Current (in force)"
+  },
+  "request": {
+    "method": "GET",
+    "url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/RedirectURL?OpenAgent=&query=mrdoc_49702.pdf",
+    "resolved_file_url": "https://www.legislation.wa.gov.au/legislation/prod/filestore.nsf/FileURL/mrdoc_49702.pdf/$FILE/Road%20Traffic%20(Vehicles)%20Regulations%202014%20-%20%5B01-at0-00%5D.pdf?OpenElement"
+  },
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_s45434.html",
+  "retrieved_at_utc": "2026-09-03T09:24:23Z",
+  "http_status": 200,
+  "content_type": "application/pdf",
+  "content_length": 2149832,
+  "file": "road_traffic_vehicles_regulations_2014_consolidated_01-at0-00.pdf",
+  "sha256": "912d05faaf5a1f1fd0b0f88751caa30fac36202ae484e6777336c5bb6b8e32af",
+  "encoding": "binary; application/pdf; stored byte-exact with no transformation, normalisation, re-serialisation, or correction",
+  "hash_convention": "SHA-256 computed over the exact stored file bytes; binary file, no trailing-newline convention applied",
+  "notes": [
+    "Official current consolidated artifact captured from the WALW source page.",
+    "No provisions or section text are staged: the current repository does not require extracted records to load a corpus source, and no deterministic PDF text extractor is pinned in this environment.",
+    "This is staging only. It is not active corpus content and must not be used as legal evidence until the owner accepts the official source/version and an independent human legal-content gate is complete."
+  ]
+}
