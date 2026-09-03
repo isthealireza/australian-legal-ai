@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import pytest
 from scripts.deepseek_review import (
+    MAX_RESPONSE_BYTES,
     ApiError,
     DeepSeekClient,
     GitDiff,
@@ -580,3 +581,37 @@ def test_diff_redaction_still_covers_token_shapes_in_source_files() -> None:
     )
     redacted = redact_diff(diff)
     assert "sk-or-v1-0000" not in redacted
+
+
+def test_oversized_review_response_is_refused() -> None:
+    """Reported by the review gate against itself as SEC-UNBOUNDED_PROVIDER_RESPONSE.
+
+    The gate talks to a third party too, so it must bound what it reads back.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "deepseek-v4-pro"}]})
+        return httpx.Response(200, json={"padding": "x" * (MAX_RESPONSE_BYTES + 1_000)})
+
+    client = DeepSeekClient(
+        api_key="test-key",
+        model="deepseek-v4-pro",
+        transport=httpx.MockTransport(handler),
+        sleep=lambda _seconds: None,
+    )
+    with pytest.raises(ApiError, match="exceeds the permitted size"):
+        client.review({"requirements": {}})
+
+
+def test_oversized_model_discovery_response_is_refused() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [{"id": "x" * (MAX_RESPONSE_BYTES + 1_000)}]})
+
+    client = DeepSeekClient(
+        api_key="test-key",
+        transport=httpx.MockTransport(handler),
+        sleep=lambda _seconds: None,
+    )
+    with pytest.raises(ApiError, match="exceeds the permitted size"):
+        client.review({"requirements": {}})

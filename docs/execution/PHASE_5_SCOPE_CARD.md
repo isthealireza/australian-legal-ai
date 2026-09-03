@@ -119,6 +119,24 @@ findings in total, all accepted and fixed with tests:
 Details in the ADR 0015 addenda. **The gate has not yet returned a
 non-blocking verdict, so this branch is not ready to merge.**
 
+### How this change is submitted for review
+
+The full diff is 306 KB, above the gate's own 300 KB bundle limit. That limit is
+a deliberate egress control and is not raised. The change is therefore reviewed
+in two complete, non-overlapping slices, and together they cover every changed
+path except `.env.example` (see below):
+
+- **Slice A — the Phase 5 deliverable.** `src/legal_ai/answering/`,
+  `src/legal_ai/api/`, `static/`, `scripts/derive_wa_provisions.py`,
+  `tests/answering/`, `tests/api/`, `docs/adr/`, `pyproject.toml`, `uv.lock`,
+  and the recorded provision fixtures. 47 paths, 239 KB.
+- **Slice B — the review-gate repair.** `scripts/deepseek_review.py`,
+  `tests/review/`, and `docs/execution/DEEPSEEK_REVIEW_GATE*.md`. 4 paths, 66 KB.
+
+A reviewer seeing only one slice is seeing a deliberate partition, not an
+incomplete submission. `pyproject.toml`, `uv.lock`, and `scripts/__init__.py`
+belong to slice A and are not omitted from the change.
+
 ### The one file the gate will not accept
 
 The gate refuses to transmit any file whose name begins with `.env`, which is

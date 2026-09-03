@@ -374,3 +374,41 @@ round overturned an accepted trade-off correctly. But it does mean a
 non-blocking verdict cannot be assumed to arrive by iterating, and `CLAUDE.md`
 is unambiguous that `BLOCKED` is a failed gate. Deciding when the hardening is
 proportionate is an owner judgement, not one further rounds can settle.
+
+## Addendum 8 — eighth round, and the first PASS (2026-09-02)
+
+The full diff reached 306 KB, above the gate's own 300 KB bundle limit. That
+limit is an egress control and was not raised. The change is instead submitted
+as two complete, non-overlapping slices, declared in the scope card so a
+reviewer can tell a deliberate partition from an incomplete submission.
+
+**Slice A — the Phase 5 deliverable. Verdict: `PASS`.** No critical or high
+findings. The reviewer recorded that the pipeline is fail-closed, citations are
+deterministically validated, provider responses are bounded, and audit-sink
+failure stops the service. This is the first non-blocking verdict in eight
+rounds, and it covers the code this task set out to build.
+
+**Slice B — the review-gate repair. Verdict: `BLOCKED`,** two findings:
+
+- `SEC-UNBOUNDED_PROVIDER_RESPONSE` (high): the gate's own DeepSeek client read
+  responses with no size bound — the same defect found in the OpenRouter
+  adapter in round 7, in the other direction. The gate talks to a third party
+  too, so both the review call and model discovery now reject an oversized body
+  before parsing.
+- `SCOPE-INCOMPLETE_REVIEW_BUNDLE` (high): the reviewer observed that slice B
+  did not contain every path the plan lists. That is the slicing, not a missing
+  change; the scope card now states the partition explicitly so a reviewer can
+  verify coverage rather than infer a gap.
+
+### Where this leaves the gate
+
+Eight rounds, twenty findings, all remediated. The deliverable now passes. The
+outstanding `BLOCKED` is on the gate script itself — code that arrived with the
+separate review-gate task and that this branch carries only because the
+mandatory gate could not otherwise execute.
+
+`CLAUDE.md` is unambiguous that a `BLOCKED` verdict is a failed gate. On the
+plain reading, this branch is still not merge-ready. The distinction worth
+putting to the owner is that the failure is now confined to the review tooling
+rather than to the Phase 5 code, and that the two concerns could reasonably be
+separated into different branches so the deliverable can merge on its own PASS.

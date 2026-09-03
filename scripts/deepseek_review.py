@@ -24,6 +24,9 @@ NEWLINE = "\n"
 MAX_FILE_BYTES = 100_000
 MAX_DIFF_BYTES = 300_000
 MAX_BUNDLE_BYTES = 400_000
+#: A review verdict is a small JSON document. Bounding the accepted body
+#: stops a compromised or malfunctioning provider from exhausting memory.
+MAX_RESPONSE_BYTES = 2_097_152
 MAX_RETRIES = 2
 #: A whole-diff review by a reasoning model takes minutes, not seconds. The
 #: read timeout is sized for that; connect/write stay short.
@@ -168,6 +171,16 @@ class SubprocessGitProvider:
         return subprocess.run(args, cwd=self._repo_root, check=False, capture_output=True)
 
 
+def _reject_oversized(response: httpx.Response, *, role: str) -> None:
+    """Refuse a response larger than the permitted size, before parsing it."""
+
+    declared = response.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
+        raise ApiError(f"DeepSeek {role} response exceeds the permitted size")
+    if len(response.content) > MAX_RESPONSE_BYTES:
+        raise ApiError(f"DeepSeek {role} response exceeds the permitted size")
+
+
 class DeepSeekClient:
     """Read-only DeepSeek client with bounded retries and strict output parsing."""
 
@@ -202,6 +215,7 @@ class DeepSeekClient:
             )
             if response.status_code != 200:
                 raise ApiError(f"DeepSeek review request failed with HTTP {response.status_code}")
+            _reject_oversized(response, role="review")
             try:
                 payload = response.json()
             except (ValueError, json.JSONDecodeError) as exc:
@@ -212,6 +226,7 @@ class DeepSeekClient:
         response = self._request(client, "GET", "/models")
         if response.status_code != 200:
             raise ApiError(f"DeepSeek model discovery failed with HTTP {response.status_code}")
+        _reject_oversized(response, role="model discovery")
         try:
             payload = response.json()
         except (ValueError, json.JSONDecodeError) as exc:
