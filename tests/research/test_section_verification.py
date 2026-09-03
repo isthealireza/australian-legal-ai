@@ -257,3 +257,51 @@ def test_recorded_sections_refuse_because_no_human_has_verified_them(identifier:
     assert verify_section(source=source, identifier=identifier) is (
         ResearchRefusalCode.SECTION_NOT_VERIFIED
     )
+
+
+def test_model_construct_bypasses_validation_and_is_pinned_as_such() -> None:
+    """`model_construct` is a documented Pydantic bypass, not a gate failure.
+
+    It is pinned here so nobody later assumes `VerifiedSection` is unforgeable
+    by every route. Real code must go through `verify_section`; re-validating a
+    constructed value catches the tampering.
+    """
+
+    forged = VerifiedSection.model_construct(
+        source_id=RECORDED_SOURCE_ID,
+        identifier="s 55",
+        heading=None,
+        text="tampered",
+        text_sha256="0" * 64,
+    )
+    assert forged.text == "tampered"
+
+    with pytest.raises(ValidationError):
+        VerifiedSection.model_validate(
+            {
+                "source_id": forged.source_id,
+                "identifier": forged.identifier,
+                "heading": forged.heading,
+                "text": forged.text,
+                "text_sha256": forged.text_sha256,
+            }
+        )
+
+
+def test_model_copy_also_skips_validators() -> None:
+    verified = verify_section(source=_bound_source(), identifier="s 55")
+    assert isinstance(verified, VerifiedSection)
+
+    tampered = verified.model_copy(update={"text": "tampered"})
+    assert tampered.text == "tampered"
+
+    with pytest.raises(ValidationError):
+        VerifiedSection.model_validate(
+            {
+                "source_id": tampered.source_id,
+                "identifier": tampered.identifier,
+                "heading": tampered.heading,
+                "text": tampered.text,
+                "text_sha256": tampered.text_sha256,
+            }
+        )

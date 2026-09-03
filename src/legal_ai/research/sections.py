@@ -53,8 +53,11 @@ class VerifiedSection(BaseModel):
     constructing this type directly or through `model_validate` re-runs them and
     raises rather than producing an unverified value.
 
-    One caveat is Pydantic's, not this module's: `model_copy` does not re-run
-    validators, so a copy is only as trustworthy as what it was copied from.
+    Two caveats are Pydantic's, not this module's. Neither `model_copy` nor
+    `model_construct` runs validators — `model_construct` is a documented
+    validation bypass — so a value produced by either is only as trustworthy as
+    what was fed to it. Both are pinned by tests so the limit stays visible.
+    Treat `verify_section` as the only construction path in real code.
     """
 
     model_config = _STRICT
