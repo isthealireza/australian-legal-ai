@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 
 import httpx
 import pytest
@@ -215,3 +216,44 @@ def test_completion_request_bounds_output_tokens() -> None:
 
     OpenRouterAnswerModel(CONFIG, transport=httpx.MockTransport(handler)).answer(_request())
     assert seen["max_tokens"] == MAX_COMPLETION_TOKENS
+
+
+def test_streaming_read_aborts_before_buffering_the_whole_body() -> None:
+    """Reported by the review gate as SEC-RESPONSE-BOUNDING-AFTER-READ.
+
+    Checking the size after the client has buffered proves nothing. This test
+    counts the chunks the provider is actually asked for: the read must stop
+    shortly after the limit, not consume the whole stream.
+    """
+
+    chunk = b"x" * 65_536
+    total_chunks = (MAX_RESPONSE_BYTES // len(chunk)) * 4
+    served = {"count": 0}
+
+    def body() -> Iterator[bytes]:
+        for _ in range(total_chunks):
+            served["count"] += 1
+            yield chunk
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # No content-length: the provider declares nothing, so the only
+        # protection is the incremental check while reading.
+        return httpx.Response(200, stream=_Stream(body()))
+
+    model = OpenRouterAnswerModel(CONFIG, transport=httpx.MockTransport(handler))
+    with pytest.raises(AnswerModelUnavailable):
+        model.answer(_request())
+
+    allowed = MAX_RESPONSE_BYTES // len(chunk) + 2
+    assert served["count"] <= allowed, f"read {served['count']} chunks, expected at most {allowed}"
+    assert served["count"] < total_chunks
+
+
+class _Stream(httpx.SyncByteStream):
+    """A response stream that yields chunks lazily, so early exit is observable."""
+
+    def __init__(self, chunks: Iterator[bytes]) -> None:
+        self._chunks = chunks
+
+    def __iter__(self) -> Iterator[bytes]:
+        yield from self._chunks

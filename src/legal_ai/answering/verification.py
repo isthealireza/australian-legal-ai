@@ -14,6 +14,7 @@ refuses it too — an unavailable check never degrades into a pass.
 
 from __future__ import annotations
 
+import json
 from typing import Protocol, runtime_checkable
 
 import httpx
@@ -21,9 +22,10 @@ import httpx
 from .errors import AnsweringError
 from .providers.openrouter import (
     MAX_PROVISION_CHARS,
-    MAX_RESPONSE_BYTES,
     TIMEOUT,
     OpenRouterConfig,
+    ResponseTooLarge,
+    read_bounded,
 )
 
 VERIFIER_SYSTEM_PROMPT = """You check whether a statement is supported by a statutory provision.
@@ -111,16 +113,19 @@ class OpenRouterEntailmentVerifier:
                 timeout=TIMEOUT,
                 transport=self._transport,
             ) as client:
-                response = client.post("/chat/completions", json=body, headers=headers)
+                with client.stream(
+                    "POST", "/chat/completions", json=body, headers=headers
+                ) as response:
+                    if response.status_code != 200:
+                        raise VerifierUnavailable(f"verifier returned HTTP {response.status_code}")
+                    raw = read_bounded(response)
+        except ResponseTooLarge as exc:
+            raise VerifierUnavailable("verifier response exceeds the permitted size") from exc
         except httpx.HTTPError as exc:
             raise VerifierUnavailable("verifier request failed") from exc
 
-        if response.status_code != 200:
-            raise VerifierUnavailable(f"verifier returned HTTP {response.status_code}")
-        if len(response.content) > MAX_RESPONSE_BYTES:
-            raise VerifierUnavailable("verifier response exceeds the permitted size")
         try:
-            content = response.json()["choices"][0]["message"]["content"]
+            content = json.loads(raw)["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise VerifierUnavailable("verifier response was malformed") from exc
         if not isinstance(content, str):

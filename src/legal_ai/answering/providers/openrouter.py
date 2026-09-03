@@ -94,6 +94,33 @@ def load_openrouter_config() -> OpenRouterConfig | None:
     )
 
 
+class ResponseTooLarge(AnswerModelUnavailable):
+    """The provider sent more bytes than are permitted."""
+
+
+def read_bounded(response: httpx.Response) -> bytes:
+    """Read a streaming response, aborting as soon as it grows too large.
+
+    The size must be enforced *while* reading. Checking after the client has
+    already buffered the body proves nothing: a provider that omits or
+    understates Content-Length would have exhausted memory before the check
+    ran. Iterating and stopping early is the only bound that actually holds.
+    """
+
+    declared = response.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
+        raise ResponseTooLarge("provider declared a response over the permitted size")
+
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_bytes():
+        total += len(chunk)
+        if total > MAX_RESPONSE_BYTES:
+            raise ResponseTooLarge("provider response exceeds the permitted size")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def _parse_propositions(content: str) -> list[dict[str, Any]]:
     """Parse the model's JSON envelope, tolerating a fenced code block."""
 
@@ -196,21 +223,19 @@ class OpenRouterAnswerModel:
                 timeout=TIMEOUT,
                 transport=self._transport,
             ) as client:
-                response = client.post("/chat/completions", json=body, headers=headers)
+                with client.stream(
+                    "POST", "/chat/completions", json=body, headers=headers
+                ) as response:
+                    if response.status_code != 200:
+                        raise AnswerModelUnavailable(
+                            f"provider returned HTTP {response.status_code}"
+                        )
+                    raw = read_bounded(response)
         except httpx.HTTPError as exc:
             raise AnswerModelUnavailable("provider request failed") from exc
 
-        if response.status_code != 200:
-            raise AnswerModelUnavailable(f"provider returned HTTP {response.status_code}")
-
-        declared = response.headers.get("content-length")
-        if declared is not None and declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
-            raise AnswerModelUnavailable("provider response exceeds the permitted size")
-        if len(response.content) > MAX_RESPONSE_BYTES:
-            raise AnswerModelUnavailable("provider response exceeds the permitted size")
-
         try:
-            payload = response.json()
+            payload = json.loads(raw)
             content = payload["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise AnswerModelUnavailable("provider response was malformed") from exc

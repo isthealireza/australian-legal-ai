@@ -445,3 +445,29 @@ while getting the mandatory gate to run at all.
 
 The gate script remains on disk in the working tree, so the owner can still run
 the gate locally from either branch.
+
+## Addendum 10 — final round on the separated branch (2026-09-02)
+
+Re-running the gate against the separated Phase 5 branch produced one finding,
+and it was correct.
+
+**`SEC-RESPONSE-BOUNDING-AFTER-READ` (high,
+`answering/providers/openrouter.py` and `answering/verification.py`).** The size
+bound added in round 7 was applied *after* `client.post()` had already buffered
+the whole body. Against a provider that omits or understates `Content-Length`
+that check proves nothing: the memory is spent before it runs. Round 7's fix
+was therefore only apparent.
+
+Both call sites now use `client.stream(...)` and `read_bounded`, which reads
+incrementally and aborts the moment the accumulated size passes the limit. The
+declared `Content-Length` is still rejected up front as a cheap early exit, but
+it is no longer relied upon.
+
+The test for this asserts the property rather than the symptom: it serves a
+lazy chunk stream with no `Content-Length` and counts how many chunks the
+adapter actually pulls, requiring that the read stop shortly past the limit
+instead of consuming the stream. An exception alone would not have distinguished
+the fixed code from the broken code.
+
+This finding is a good argument for the whole loop: it corrected a fix that
+looked right, passed its own tests, and did not hold.
