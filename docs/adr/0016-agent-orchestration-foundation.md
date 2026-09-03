@@ -59,9 +59,22 @@ allowlist, including the coordinator's. A role writes only when a contract sets
 The allowlist holds canonical repository-relative paths and is compared by exact
 match. There are no globs and no prefix rules, so allowlisting
 `docs/adr/0016-agent-orchestration-foundation.md` does not allowlist
-`docs/adr/`. Absolute paths, drive letters, backslashes and `..` traversal are
-rejected during normalisation rather than normalised away, so an allowlist
-cannot be defeated by spelling.
+`docs/adr/`.
+
+Normalisation rejects rather than repairs. Traversal, absolute and
+drive-qualified paths, backslashes, alternate data streams, non-NFC Unicode,
+control characters, Windows reserved device names, and the trailing dot or space
+that NTFS silently strips are all refused, because repairing a name is exactly
+what would let an allowlist authorise a different file.
+
+**Accepted limitation.** `normalise_repo_path` is pure and does no filesystem
+I/O, so it does not resolve symlinks: on a case-insensitive filesystem, or where
+an allowlisted path is a symlink, the name check alone can authorise a different
+object. Resolving would make the function environment-dependent and
+non-deterministic, which costs more than it buys here, because the name check is
+not the only barrier — each worker runs in its own git worktree on its own
+branch and cannot reach the coordinator's files at all. A future slice that
+enforces the allowlist against a live working tree must add resolution there.
 
 This is the executable form of `PROJECT_GOVERNANCE.md` §9.3: two contributors
 never hold simultaneous write access to the same files.
@@ -75,18 +88,29 @@ apply: a task reaches `READY` only when every dependency has completed, and a
 `FAILED` task re-enters `READY` only while its bounded retry allowance remains.
 `COMPLETED` is terminal.
 
+The guard enforces the retry ceiling itself rather than trusting
+`BoundedTaskContract` to have capped it, because the function is exported and a
+caller that never built a contract must not be able to grant itself more
+attempts.
+
 ### 4. Worker messages and results are untrusted data
 
 `WorkerMessage` and `WorkerResult` are the schemas for what comes back through
 Orca. They are treated exactly as retrieved content is treated under
 `PROJECT_GOVERNANCE.md` §6: data, never instruction.
 
-`validate_worker_result` is the only way to obtain an `AcceptedWorkerResult`, so
-holding one is proof the check ran. It rejects a result naming another task, a
-result claiming a role its contract did not grant, a read-only or review-only
-worker that reports having modified anything, and any modified path outside the
-contract's allowlist. A `FAILED` outcome is validated on the same terms — a
-worker cannot escape its file scope by reporting failure.
+The consistency check rejects a result naming another task, a result claiming
+a role its contract did not grant, a read-only or review-only worker that
+reports having modified anything, and any modified path outside the contract's
+allowlist. A `FAILED` outcome is validated on the same terms — a worker cannot
+escape its file scope by reporting failure.
+
+`AcceptedWorkerResult` re-runs that check in its own validator rather than
+relying on `validate_worker_result` being the only caller. A public frozen
+Pydantic model has a public constructor, and `frozen` prevents mutation, not
+construction; re-checking is what makes the type's guarantee true however it was
+built. The one gap is Pydantic's: `model_copy` does not re-run validators, which
+the type documents and a test pins.
 
 ### 5. The DAG is bounded and its order is stable
 

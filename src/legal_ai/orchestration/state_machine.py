@@ -8,7 +8,7 @@ default.
 from __future__ import annotations
 
 from legal_ai.orchestration.errors import InvalidTaskTransitionError
-from legal_ai.orchestration.types import TaskState
+from legal_ai.orchestration.types import MAX_ATTEMPTS_CEILING, TaskState
 
 _ALLOWED: dict[TaskState, frozenset[TaskState]] = {
     TaskState.PENDING: frozenset({TaskState.READY, TaskState.BLOCKED}),
@@ -41,15 +41,27 @@ def assert_task_transition_allowed(
     - a task only becomes `READY` once every dependency has completed;
     - a `FAILED` task only re-enters `READY` while attempts remain, so the
       bounded retry allowance cannot be exceeded by repeated retries.
+
+    The attempt counters are checked against `MAX_ATTEMPTS_CEILING` here as well
+    as in `BoundedTaskContract`, because this function is exported and a caller
+    that never built a contract must not be able to grant itself more attempts.
     """
 
     if attempt < 1:
         raise InvalidTaskTransitionError(
             current=current, target=target, reason="attempt must be >= 1"
         )
-    if max_attempts < 1:
+    if not 1 <= max_attempts <= MAX_ATTEMPTS_CEILING:
         raise InvalidTaskTransitionError(
-            current=current, target=target, reason="max_attempts must be >= 1"
+            current=current,
+            target=target,
+            reason=f"max_attempts must be 1..{MAX_ATTEMPTS_CEILING}",
+        )
+    if attempt > max_attempts:
+        raise InvalidTaskTransitionError(
+            current=current,
+            target=target,
+            reason=f"attempt {attempt} exceeds max_attempts {max_attempts}",
         )
 
     if target not in allowed_targets(current):

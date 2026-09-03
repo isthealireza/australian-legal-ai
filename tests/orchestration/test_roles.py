@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 import pytest
 from pydantic import ValidationError
 
@@ -103,3 +105,37 @@ def test_normalisation_is_idempotent_and_strips_noise() -> None:
     assert normalise_repo_path("./src//legal_ai/orchestration/roles.py") == (
         "src/legal_ai/orchestration/roles.py"
     )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/legal_ai/orchestration/roles.py.",
+        "src/legal_ai/orchestration/roles.py ",
+        "src/legal_ai/orchestration /roles.py",
+        "src/legal_ai/orchestration/roles.py:stream",
+        "src/legal_ai/orchestration/CON.py",
+        "src/legal_ai/orchestration/nul",
+        "src/legal_ai/orchestration/ro\tles.py",
+    ],
+)
+def test_filesystem_aliasing_spellings_are_rejected(path: str) -> None:
+    """NTFS strips a trailing dot or space, and reserved names alias devices."""
+
+    with pytest.raises(OrchestrationValidationError):
+        normalise_repo_path(path)
+
+
+def test_non_nfc_unicode_is_rejected_rather_than_normalised() -> None:
+    decomposed = "docs/adr/cafe\u0301.md"
+    assert unicodedata.normalize("NFC", decomposed) != decomposed
+    with pytest.raises(OrchestrationValidationError):
+        normalise_repo_path(decomposed)
+
+
+def test_case_differences_are_not_treated_as_the_same_path() -> None:
+    """An exact-match allowlist is case sensitive; the sibling stays refused."""
+
+    configuration = _scoped("src/legal_ai/orchestration/roles.py")
+    with pytest.raises(RoleAccessDenied):
+        assert_write_allowed(configuration, "src/legal_ai/orchestration/ROLES.py")

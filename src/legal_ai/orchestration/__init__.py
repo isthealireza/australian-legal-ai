@@ -53,6 +53,7 @@ from legal_ai.orchestration.state_machine import (
     assert_task_transition_allowed,
 )
 from legal_ai.orchestration.types import (
+    MAX_ATTEMPTS_CEILING,
     TERMINAL_TASK_STATES,
     AccessMode,
     AutonomousActivity,
@@ -69,6 +70,7 @@ __all__ = [
     "APPROVAL_BOUNDARY_RECORDED_ON",
     "AUTONOMOUS_ACTIVITIES",
     "DEFAULT_ROLE_CONFIGURATIONS",
+    "MAX_ATTEMPTS_CEILING",
     "MAX_TASKS",
     "ORCHESTRATION_AUTHORITY_CEILING",
     "PROTECTED_DECISIONS",

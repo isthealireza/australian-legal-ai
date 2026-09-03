@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from legal_ai.casework.types import ActionAuthorityLevel
 from legal_ai.orchestration.contracts import (
+    AcceptedWorkerResult,
     BoundedTaskContract,
     ReviewFinding,
     WorkerMessage,
@@ -219,3 +220,68 @@ def test_a_failed_outcome_still_validates_its_file_scope() -> None:
     )
     with pytest.raises(WorkerResultRejected):
         validate_worker_result(contract=make_contract(), result=result)
+
+
+def test_accepted_result_cannot_be_forged_by_direct_construction() -> None:
+    """The check re-runs in the validator, so there is no bypass constructor."""
+
+    contract = make_review_contract()
+    forged = make_result(
+        role=WorkerRole.REVIEWER,
+        files_modified=frozenset({"PROJECT_GOVERNANCE.md"}),
+    )
+    with pytest.raises(WorkerResultRejected):
+        AcceptedWorkerResult(contract=contract, result=forged, blocking_findings=())
+
+
+def test_accepted_result_cannot_be_forged_by_model_validate() -> None:
+    contract = make_review_contract()
+    forged = make_result(role=WorkerRole.IMPLEMENTER)
+    with pytest.raises(WorkerResultRejected):
+        AcceptedWorkerResult.model_validate(
+            {"contract": contract, "result": forged, "blocking_findings": ()}
+        )
+
+
+def test_accepted_result_cannot_misreport_its_blocking_findings() -> None:
+    contract = make_review_contract()
+    result = make_result(
+        role=WorkerRole.REVIEWER,
+        findings=(
+            ReviewFinding(
+                severity=FindingSeverity.BLOCKING,
+                location="src/legal_ai/orchestration/graph.py:1",
+                summary="Cycle detection is unreachable.",
+            ),
+        ),
+    )
+    with pytest.raises(WorkerResultRejected) as excinfo:
+        AcceptedWorkerResult(contract=contract, result=result, blocking_findings=())
+    assert "do not match" in str(excinfo.value)
+
+
+def test_model_copy_skips_validators_so_a_copy_is_rechecked_explicitly() -> None:
+    """`model_copy` is Pydantic's documented escape hatch: it does not re-validate.
+
+    An `AcceptedWorkerResult` therefore only proves the check ran for the state
+    it was validated with. Re-validating a copy catches the tampering, which is
+    what `validate_worker_result` callers get for free.
+    """
+
+    accepted = validate_worker_result(
+        contract=make_review_contract(),
+        result=make_result(role=WorkerRole.REVIEWER),
+    )
+    tampered = accepted.model_copy(
+        update={"result": make_result(role=WorkerRole.REVIEWER, task_id="T9")}
+    )
+    assert tampered.result.task_id == "T9"
+
+    with pytest.raises(WorkerResultRejected):
+        AcceptedWorkerResult.model_validate(
+            {
+                "contract": tampered.contract,
+                "result": tampered.result,
+                "blocking_findings": tampered.blocking_findings,
+            }
+        )

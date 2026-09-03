@@ -16,13 +16,17 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from legal_ai.casework.types import ActionAuthorityLevel, authority_rank
-from legal_ai.orchestration.errors import WorkerResultRejected
+from legal_ai.orchestration.errors import (
+    OrchestrationValidationError,
+    WorkerResultRejected,
+)
 from legal_ai.orchestration.roles import (
     RoleConfiguration,
     normalise_repo_path,
     resolve_role_configuration,
 )
 from legal_ai.orchestration.types import (
+    MAX_ATTEMPTS_CEILING,
     AccessMode,
     ExactBody,
     ExactLine,
@@ -40,7 +44,6 @@ MAX_ACCEPTANCE_CRITERIA = 20
 MAX_SCOPE_PATHS = 64
 MAX_DEPENDENCIES = 16
 MAX_FINDINGS = 100
-MAX_ATTEMPTS_CEILING = 3
 
 ORCHESTRATION_AUTHORITY_CEILING = ActionAuthorityLevel.L1
 """Coordinating engineering work is read-only research (L0) or an internal
@@ -182,8 +185,14 @@ class WorkerResult(BaseModel):
 class AcceptedWorkerResult(BaseModel):
     """A worker result that has been checked against its contract.
 
-    Only `validate_worker_result` constructs this type, so holding one is proof
-    the check ran.
+    The contract/result consistency check runs again in the model validator, so
+    constructing this type directly, through `model_validate`, or through a
+    deserialiser re-runs exactly the same checks and raises the same
+    `WorkerResultRejected` on mismatch.
+
+    One caveat is Pydantic's, not this module's: `model_copy` does not re-run
+    validators, so a copy is only as trustworthy as the state it was copied
+    from. Re-validate a copy before believing it.
     """
 
     model_config = _STRICT
@@ -192,13 +201,23 @@ class AcceptedWorkerResult(BaseModel):
     result: WorkerResult
     blocking_findings: tuple[ReviewFinding, ...]
 
+    @model_validator(mode="after")
+    def _recheck(self) -> AcceptedWorkerResult:
+        expected = _check_result_against_contract(contract=self.contract, result=self.result)
+        if self.blocking_findings != expected:
+            raise WorkerResultRejected(
+                task_id=self.contract.task_id,
+                reason="blocking_findings do not match the result being accepted",
+            )
+        return self
 
-def validate_worker_result(
+
+def _check_result_against_contract(
     *,
     contract: BoundedTaskContract,
     result: WorkerResult,
-) -> AcceptedWorkerResult:
-    """Check an untrusted result against its contract, or reject it.
+) -> tuple[ReviewFinding, ...]:
+    """Check an untrusted result against its contract; return its blocking findings.
 
     The checks are deterministic and total: identity must match, a role without
     write access must report no modified files, and every reported file must be
@@ -220,7 +239,7 @@ def validate_worker_result(
 
     try:
         reported = frozenset(normalise_repo_path(path) for path in result.files_modified)
-    except Exception as exc:
+    except OrchestrationValidationError as exc:
         raise WorkerResultRejected(
             task_id=contract.task_id, reason=f"unusable modified path: {exc}"
         ) from exc
@@ -241,7 +260,17 @@ def validate_worker_result(
             reason=f"modified files outside the allowlist: {', '.join(sorted(outside))}",
         )
 
-    blocking = tuple(
+    return tuple(
         finding for finding in result.findings if finding.severity is FindingSeverity.BLOCKING
     )
+
+
+def validate_worker_result(
+    *,
+    contract: BoundedTaskContract,
+    result: WorkerResult,
+) -> AcceptedWorkerResult:
+    """Check an untrusted result against its contract, or reject it."""
+
+    blocking = _check_result_against_contract(contract=contract, result=result)
     return AcceptedWorkerResult(contract=contract, result=result, blocking_findings=blocking)

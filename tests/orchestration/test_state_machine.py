@@ -9,7 +9,7 @@ from legal_ai.orchestration.state_machine import (
     allowed_targets,
     assert_task_transition_allowed,
 )
-from legal_ai.orchestration.types import TaskState
+from legal_ai.orchestration.types import MAX_ATTEMPTS_CEILING, TaskState
 
 
 def _assert(current: TaskState, target: TaskState, **overrides: object) -> None:
@@ -83,3 +83,17 @@ def test_nonsensical_attempt_counters_are_refused(attempt: int, max_attempts: in
             attempt=attempt,
             max_attempts=max_attempts,
         )
+
+
+def test_state_machine_enforces_the_retry_ceiling_independently() -> None:
+    """The exported guard is callable without a contract, so it caps attempts too."""
+
+    with pytest.raises(InvalidTaskTransitionError) as excinfo:
+        _assert(TaskState.FAILED, TaskState.READY, attempt=1, max_attempts=999)
+    assert f"1..{MAX_ATTEMPTS_CEILING}" in str(excinfo.value)
+
+
+def test_attempt_may_not_exceed_its_own_allowance() -> None:
+    with pytest.raises(InvalidTaskTransitionError) as excinfo:
+        _assert(TaskState.PENDING, TaskState.READY, attempt=3, max_attempts=2)
+    assert "exceeds max_attempts" in str(excinfo.value)

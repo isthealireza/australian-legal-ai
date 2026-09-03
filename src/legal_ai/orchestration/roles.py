@@ -4,9 +4,23 @@ Write access is denied by default. A role becomes able to change files only
 when its configuration is `SCOPED_WRITE` *and* the exact repository-relative
 path appears in an explicit allowlist. There are no globs, no prefixes and no
 implicit widening: an unlisted path is refused.
+
+`normalise_repo_path` is a pure function over the *name*. It rejects every
+spelling that a case-insensitive or name-mangling filesystem could treat as
+equivalent to a different name — traversal, absolute and drive-qualified paths,
+backslashes, non-NFC Unicode, control characters, alternate data streams,
+Windows reserved device names, and the trailing dot or space that NTFS strips.
+
+It deliberately does **not** resolve symlinks, because resolution needs
+filesystem I/O and would make the check non-deterministic and environment
+dependent. Name-level authorisation is not the only barrier: a worker runs in
+its own git worktree on its own branch, so it cannot reach the coordinator's
+files whatever its allowlist says. See ADR 0016.
 """
 
 from __future__ import annotations
+
+import unicodedata
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -22,24 +36,50 @@ _STRICT = ConfigDict(extra="forbid", strict=True, frozen=True)
 MAX_WRITABLE_PATHS = 64
 
 
+_RESERVED_DEVICE_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{index}" for index in range(1, 10)}
+    | {f"LPT{index}" for index in range(1, 10)}
+)
+
+
 def normalise_repo_path(path: str) -> str:
     """Return a canonical repository-relative path, or reject it.
 
-    Rejects absolute paths, drive letters, parent traversal, and backslashes so
-    that an allowlist comparison cannot be defeated by spelling.
+    Rejects every spelling that a filesystem could alias onto a different name.
+    Rejection is deliberate: a path is never silently repaired into a canonical
+    form, because repairing is what lets an allowlist authorise the wrong file.
     """
 
     if not path.strip():
         raise OrchestrationValidationError("path must contain a non-whitespace character")
+    if unicodedata.normalize("NFC", path) != path:
+        raise OrchestrationValidationError(f"path must be Unicode NFC: {path!r}")
+    if any(character < " " or character == "" for character in path):
+        raise OrchestrationValidationError(f"path must not contain control characters: {path!r}")
     if "\\" in path:
         raise OrchestrationValidationError(f"path must use forward slashes: {path!r}")
-    if path.startswith("/") or (len(path) > 1 and path[1] == ":"):
+    if ":" in path:
+        raise OrchestrationValidationError(
+            f"path must be repository-relative and carry no stream suffix: {path!r}"
+        )
+    if path.startswith("/"):
         raise OrchestrationValidationError(f"path must be repository-relative: {path!r}")
+
     segments = [segment for segment in path.split("/") if segment not in {"", "."}]
     if not segments:
         raise OrchestrationValidationError(f"path resolves to nothing: {path!r}")
-    if any(segment == ".." for segment in segments):
-        raise OrchestrationValidationError(f"path must not traverse upwards: {path!r}")
+
+    for segment in segments:
+        if segment == "..":
+            raise OrchestrationValidationError(f"path must not traverse upwards: {path!r}")
+        if segment != segment.rstrip(". "):
+            raise OrchestrationValidationError(
+                f"path segment must not end in a dot or space: {path!r}"
+            )
+        if segment.split(".")[0].upper() in _RESERVED_DEVICE_NAMES:
+            raise OrchestrationValidationError(f"path segment is a reserved device name: {path!r}")
+
     return "/".join(segments)
 
 

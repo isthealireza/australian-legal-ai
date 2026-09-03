@@ -73,6 +73,11 @@ class TaskState(StrEnum):
 
 TERMINAL_TASK_STATES: frozenset[TaskState] = frozenset({TaskState.COMPLETED})
 
+MAX_ATTEMPTS_CEILING = 3
+"""A bounded task gets a bounded number of attempts. Shared by the contract
+model and the state machine so a direct state-machine caller cannot exceed the
+allowance a contract would have capped."""
+
 
 class MessageType(StrEnum):
     """Message kinds exchanged through the orchestration transport."""
