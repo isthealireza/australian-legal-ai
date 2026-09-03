@@ -1,6 +1,6 @@
 # Orchestration Foundation Scope Card
 
-**Branch:** `feat/orchestration-foundation` (based on `feat/phase-5-grounded-answer-api` @ `44138ab`)
+**Branch:** `feat/orchestration-foundation` (based on `main`)
 **Governing decision:** [ADR 0016](../adr/0016-agent-orchestration-foundation.md) (Proposed)
 **Authority level:** L0 — deterministic, read-only, no I/O
 **Status:** implemented, validated, reviewed by the Codex review worker; **not merged**, awaiting ADR acceptance and an explicit merge instruction
@@ -57,13 +57,20 @@ merging or tagging.
 
 ```
 uv run ruff check .                  # All checks passed!
-uv run ruff format --check .         # 174 files already formatted
-uv run mypy .                        # Success: no issues found in 174 source files
-uv run pytest -m "not integration"   # 1021 passed, 46 skipped, 100 deselected
+uv run ruff format --check .         # 143 files already formatted
+uv run mypy .                        # Success: no issues found in 143 source files
+uv run pytest -m "not integration"   # 934 passed, 45 skipped, 100 deselected,
+                                     # 2 pre-existing env failures (see below)
 ```
 
-No test opens a socket, reads a clock, or touches a database. The package
-performs no I/O at all.
+The 94 tests this slice adds all pass. Two tests in `tests/research/
+test_sections.py` fail on this Windows workstation with `OSError [WinError
+1314]` because creating a symlink needs a privilege the shell does not hold.
+They are on `main`, this branch does not touch `tests/research/` or
+`src/legal_ai/research/`, and CI runs `ubuntu-latest` where they pass.
+
+No test this slice adds opens a socket, reads a clock, or touches a database.
+The package performs no I/O at all.
 
 ## Orchestration record
 
@@ -123,8 +130,11 @@ was written from a directory listing that included untracked files.
 
 - ADR 0016 is **Proposed**, not accepted. Merging before acceptance would breach
   `ENGINEERING_WORKFLOW.md` §2.
-- The branch is stacked on the unmerged `feat/phase-5-grounded-answer-api`. It
-  must not merge before Phase 5 does, or it will carry Phase 5 with it.
+- The branch was originally cut from the local `feat/phase-5-grounded-answer-api`
+  line and has been rebased onto `main`, so the PR carries these 17 files and
+  nothing else. That Phase 5 line is unpushed and its ADR numbers 0014/0015
+  collide with different accepted ADRs already on `main`; resolving that is
+  someone else's task, not this one.
 - The module describes coordination but does not enforce it at runtime. Nothing
   yet makes an Orca dispatch pass through `BoundedTaskContract`; that binding is
   a separate, unauthorised slice.

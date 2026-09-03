@@ -4,6 +4,8 @@
 - Date: 2026-09-03
 - Accepted: not yet accepted — owner authorisation required before merge
 - Builds on: [ADR 0011](0011-governance-and-engineering-terminology.md)
+- Base: `main`. This slice is independent of the Phase 4/5 line; its only
+  cross-module import is `legal_ai.casework.types` (Phase 1).
 - Governed by: `PROJECT_GOVERNANCE.md` §9, `ENGINEERING_WORKFLOW.md` §1–4
 
 ## Context
@@ -139,11 +141,10 @@ protected, not autonomous.
 ## Consequences
 
 **Kept.** Fail-closed legal grounding, deterministic citation and provenance,
-entailment verification, the permanent disclaimer and the audit controls are
-untouched — no file in `answering/`, `research/`, `api/`, `casework/`,
-`evidence/`, `playbooks/`, `provenance/`, `legislation/`, `parsing/`, `db/` or
-`sources/` changes, and no existing test changes. The HTTP API behaves
-identically because nothing imports this package.
+the permanent disclaimer and the audit controls are untouched. No existing file
+changes anywhere in `src/` or `tests/` — the diff against `main` adds new paths
+only, plus one appended line in the ADR index. Nothing imports this package, so
+every existing surface behaves identically.
 
 **Gained.** The rules that keep multi-agent work safe are now executable and
 tested, so violating one is a raised exception rather than a missed paragraph.
