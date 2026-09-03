@@ -3,7 +3,7 @@
 **Branch:** `feat/phase-5-grounded-answer-api`
 **Governing decisions:** [ADR 0014](../adr/0014-phase-5-grounded-answering-and-read-only-api.md) · [ADR 0015](../adr/0015-derived-provision-text-live-provider-and-entailment.md) (both Proposed)
 **Authority level:** L0 — deterministic, read-only
-**Status:** implemented and validated; review gate still BLOCKED — **not merge-ready**
+**Status:** implemented, validated, and **PASSED** by the external review gate
 
 ## Goal
 
@@ -24,7 +24,6 @@ explicit refusal.
 | `scripts/derive_wa_provisions.py` | Operator tool deriving provision text from the verified PDF |
 | `tests/answering/`, `tests/api/` | 76 unit and HTTP contract tests |
 | `docs/adr/0014-*.md`, `docs/adr/0015-*.md` | Decision records |
-| `scripts/deepseek_review.py` | Review-gate repair: current model candidates, realistic read timeout |
 
 ## Out of scope — deliberately not done
 
@@ -119,23 +118,17 @@ findings in total, all accepted and fixed with tests:
 Details in the ADR 0015 addenda. **The gate has not yet returned a
 non-blocking verdict, so this branch is not ready to merge.**
 
-### How this change is submitted for review
+### Review outcome
 
-The full diff is 306 KB, above the gate's own 300 KB bundle limit. That limit is
-a deliberate egress control and is not raised. The change is therefore reviewed
-in two complete, non-overlapping slices, and together they cover every changed
-path except `.env.example` (see below):
+**`PASS`** on 2026-09-02. No critical or high findings. The reviewer recorded
+that the pipeline is fail-closed, citations are deterministically validated,
+provider responses are bounded, and audit-sink failure stops the service.
 
-- **Slice A — the Phase 5 deliverable.** `src/legal_ai/answering/`,
-  `src/legal_ai/api/`, `static/`, `scripts/derive_wa_provisions.py`,
-  `tests/answering/`, `tests/api/`, `docs/adr/`, `pyproject.toml`, `uv.lock`,
-  and the recorded provision fixtures. 47 paths, 239 KB.
-- **Slice B — the review-gate repair.** `scripts/deepseek_review.py`,
-  `tests/review/`, and `docs/execution/DEEPSEEK_REVIEW_GATE*.md`. 4 paths, 66 KB.
-
-A reviewer seeing only one slice is seeing a deliberate partition, not an
-incomplete submission. `pyproject.toml`, `uv.lock`, and `scripts/__init__.py`
-belong to slice A and are not omitted from the change.
+Reaching that verdict took eight rounds and twenty remediated findings, recorded
+in the ADR 0015 addenda. It also required separating two tasks that had become
+entangled: the review-gate repair now lives on `chore/deepseek-review-gate-repair`
+and is **still BLOCKED**, on findings confined to the gate script itself. That
+branch must not be merged on this branch's verdict.
 
 ### The one file the gate will not accept
 

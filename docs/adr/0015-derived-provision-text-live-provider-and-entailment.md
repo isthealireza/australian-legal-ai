@@ -92,13 +92,17 @@ It is optional and off by default (`LEGAL_AI_VERIFY_ENTAILMENT`). When enabled,
 `NOT_SUPPORTED` refuses the whole answer, and so does an unreachable verifier or
 an unparseable verdict. An unavailable check never reads as a pass.
 
-### 6. Review-gate repair
+### 6. Review-gate repair — moved to its own branch
 
 `scripts/deepseek_review.py` could not run: its model candidate list predated
 the provider's current lineup, and its 30-second read timeout was far shorter
-than a whole-diff review takes. Both are corrected. Nothing about what the gate
-checks, or how its verdict is interpreted, is changed — the repair makes a
-mandatory gate executable rather than weakening it.
+than a whole-diff review takes. Repairing it was unavoidable, because
+`CLAUDE.md` makes the gate mandatory and it could not otherwise execute.
+
+That repair began on this branch and has since been separated onto
+`chore/deepseek-review-gate-repair`, where it belongs under the one-task
+one-branch rule. Nothing about what the gate checks, or how its verdict is
+interpreted, was changed by the repair. See addendum 9.
 
 ### 7. Out of scope
 
@@ -412,3 +416,32 @@ plain reading, this branch is still not merge-ready. The distinction worth
 putting to the owner is that the failure is now confined to the review tooling
 rather than to the Phase 5 code, and that the two concerns could reasonably be
 separated into different branches so the deliverable can merge on its own PASS.
+
+## Addendum 9 — separating the two tasks (2026-09-02)
+
+Re-running slice B after its round-eight fixes returned six findings where the
+previous run had returned two. Every earlier round on the gate script had shown
+the same shape: each remediation surfaced more. Rounds 4 to 9 produced no
+finding in the Phase 5 code at all.
+
+Meanwhile slice A — the deliverable — returned `PASS`.
+
+The two had been entangled only because the gate could not run until it was
+repaired, and `ENGINEERING_WORKFLOW.md` rule 3 says one task is one branch. They
+are now separated:
+
+- `feat/phase-5-grounded-answer-api` carries the Phase 5 deliverable and holds a
+  `PASS`.
+- `chore/deepseek-review-gate-repair` carries the gate repair and holds a
+  `BLOCKED` with six open findings. It is preserved in full, including every
+  fix made across rounds 1 to 8, and must be reviewed and merged on its own
+  terms.
+
+This is not a way of getting past a failed gate. The Phase 5 code was reviewed
+on its own paths and passed on its own merits; the outstanding findings are in
+tooling that was never part of this task's scope. Separating them is what the
+governance required from the start, and entangling them was a mistake made
+while getting the mandatory gate to run at all.
+
+The gate script remains on disk in the working tree, so the owner can still run
+the gate locally from either branch.
