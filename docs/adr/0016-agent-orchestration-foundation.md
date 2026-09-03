@@ -1,8 +1,8 @@
 # ADR 0016: Agent Orchestration Foundation
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-03
-- Accepted: not yet accepted — owner authorisation required before merge
+- Accepted: 2026-09-03 — owner authorisation received in Codex
 - Builds on: [ADR 0011](0011-governance-and-engineering-terminology.md)
 - Base: `main`. This slice is independent of the Phase 4/5 line; its only
   cross-module import is `legal_ai.casework.types` (Phase 1).

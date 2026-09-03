@@ -1,9 +1,9 @@
 # Orchestration Foundation Scope Card
 
 **Branch:** `feat/orchestration-foundation` (based on `main`)
-**Governing decision:** [ADR 0016](../adr/0016-agent-orchestration-foundation.md) (Proposed)
+**Governing decision:** [ADR 0016](../adr/0016-agent-orchestration-foundation.md) (Accepted 2026-09-03)
 **Authority level:** L0 — deterministic, read-only, no I/O
-**Status:** implemented, validated, reviewed by the Codex review worker; **not merged**, awaiting ADR acceptance and an explicit merge instruction
+**Status:** implemented, validated, reviewed by the Codex review worker; **not merged**, awaiting the explicit merge instruction
 
 ## Goal
 
@@ -128,8 +128,8 @@ was written from a directory listing that included untracked files.
 
 ## Risks
 
-- ADR 0016 is **Proposed**, not accepted. Merging before acceptance would breach
-  `ENGINEERING_WORKFLOW.md` §2.
+- ADR 0016 is accepted by the owner on 2026-09-03. The explicit merge
+  instruction remains required by `ENGINEERING_WORKFLOW.md` §2.
 - The branch was originally cut from the local `feat/phase-5-grounded-answer-api`
   line and has been rebased onto `main`, so the PR carries these 17 files and
   nothing else. That Phase 5 line is unpushed and its ADR numbers 0014/0015
