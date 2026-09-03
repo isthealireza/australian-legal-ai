@@ -19,7 +19,12 @@ from typing import Protocol, runtime_checkable
 import httpx
 
 from .errors import AnsweringError
-from .providers.openrouter import MAX_PROVISION_CHARS, TIMEOUT, OpenRouterConfig
+from .providers.openrouter import (
+    MAX_PROVISION_CHARS,
+    MAX_RESPONSE_BYTES,
+    TIMEOUT,
+    OpenRouterConfig,
+)
 
 VERIFIER_SYSTEM_PROMPT = """You check whether a statement is supported by a statutory provision.
 
@@ -112,6 +117,8 @@ class OpenRouterEntailmentVerifier:
 
         if response.status_code != 200:
             raise VerifierUnavailable(f"verifier returned HTTP {response.status_code}")
+        if len(response.content) > MAX_RESPONSE_BYTES:
+            raise VerifierUnavailable("verifier response exceeds the permitted size")
         try:
             content = response.json()["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:

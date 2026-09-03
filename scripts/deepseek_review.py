@@ -20,6 +20,7 @@ import httpx
 
 BASE_URL = "https://api.deepseek.com"
 RUNTIME_OUTPUT_DIR = ".deepseek-review"
+NEWLINE = "\n"
 MAX_FILE_BYTES = 100_000
 MAX_DIFF_BYTES = 300_000
 MAX_BUNDLE_BYTES = 400_000
@@ -311,6 +312,80 @@ def redact_secrets(value: str) -> str:
     return redacted
 
 
+#: Extensions whose contents are program text. A bare identifier-shaped value
+#: in these files is indistinguishable from ordinary code, so the aggressive
+#: rule is not applied to them.
+_SOURCE_SUFFIXES = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".rb",
+        ".php",
+        ".cs",
+        ".c",
+        ".h",
+        ".cpp",
+        ".hpp",
+        ".swift",
+        ".scala",
+        ".sql",
+        ".sh",
+        ".ps1",
+        ".html",
+        ".css",
+    }
+)
+
+#: In a non-source file an assignment line is configuration, so a bare
+#: identifier-shaped value on the right-hand side is a credential.
+_BARE_SECRET_ASSIGNMENT = re.compile(
+    r"(?im)^([+\- ]?\s*\w*(?:api_key|apikey|secret|password|passwd|token|credential)\w*"
+    r"\s*[:=]\s*)(\S{8,})\s*$"
+)
+
+_DIFF_FILE_HEADER = re.compile(r"^\+\+\+ (?:b/)?(.+)$")
+
+
+def _is_source_file(path: str) -> bool:
+    """True when the path names program text rather than configuration."""
+
+    return PurePosixPath(path.strip()).suffix.lower() in _SOURCE_SUFFIXES
+
+
+def redact_diff(diff: str) -> str:
+    """Redact a unified diff, applying a stricter rule to non-source files.
+
+    `redact_secrets` deliberately will not touch a bare identifier-shaped value
+    such as `api_key=supersecretvalue`, because in program text that is
+    indistinguishable from `api_key=some_variable` and rewriting it would
+    corrupt the diff under review. In a configuration file there is no such
+    ambiguity, so the stricter rule is applied there and only there.
+    """
+
+    lines = redact_secrets(diff).splitlines()
+    current_is_source = True
+    out: list[str] = []
+    for line in lines:
+        header = _DIFF_FILE_HEADER.match(line)
+        if header is not None:
+            current_is_source = _is_source_file(header.group(1))
+            out.append(line)
+            continue
+        if current_is_source or line.startswith(("---", "diff --git", "index ", "@@")):
+            out.append(line)
+            continue
+        out.append(_BARE_SECRET_ASSIGNMENT.sub(r"\1[REDACTED]", line))
+    return NEWLINE.join(out)
+
+
 def validate_review_result(value: object) -> dict[str, Any]:
     """Validate the exact independent-review JSON contract."""
 
@@ -446,7 +521,7 @@ class ReviewTool:
             "git_diff": {
                 "base_ref": base_ref,
                 "changed_files": list(diff.changed_paths),
-                "content": redact_secrets(diff.content),
+                "content": redact_diff(diff.content),
             },
             "test_results": {
                 "path": self._display_path(test_output_path),

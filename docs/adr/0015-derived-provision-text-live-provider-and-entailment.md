@@ -326,3 +326,51 @@ over a large diff surfaces further hardening. `CLAUDE.md` is unambiguous that a
 `BLOCKED` verdict is a failed gate and must never be read as a pass, so **this
 branch is not merge-ready**, and that judgement is the owner's to make rather
 than something further iteration can settle on its own.
+
+## Addendum 7 — seventh review round (2026-09-02)
+
+Three findings, all fixed. One reopened a trade-off addendum 6 had recorded as
+accepted, and reopening it was right.
+
+**`SEC-UNBOUNDED_PROVIDER_RESPONSE` (high,
+`answering/providers/openrouter.py`).** The adapter sent no `max_tokens` and
+accepted a response of any size before parsing it. A compromised or
+malfunctioning provider could exhaust memory before validation ever ran.
+Requests now cap completion tokens, and both the declared `Content-Length` and
+the received body are bounded before `json()` is called. The verifier gained the
+same bound on its return path.
+
+**`OPS-AUDIT_SINK_STARTUP_FAILURE` (medium, `api/main.py`).** An unwritable
+audit log made `JsonlResearchAuditSink.__init__` raise out of `create_app`,
+crashing the process at startup. The failure is now caught and converted into
+`AUDIT_SINK_NOT_WRITABLE`: the service starts, reports itself unconfigured, and
+refuses every request with HTTP 503. A stopped service is the correct outcome —
+never a crashed process, and never one that answers without an audit trail.
+
+**`SEC-REDACTION_BARE_IDENTIFIER_GAP` (high,
+`scripts/deepseek_review.py`).** Addendum 6 recorded that a bare
+identifier-shaped value such as `api_key=supersecretvalue` could not be redacted
+without reintroducing `REDACTION_CORRUPTS_REVIEW_BUNDLE`, since in program text
+it is indistinguishable from `api_key=some_variable`. That reasoning held only
+because redaction was file-blind.
+
+Redaction is now file-aware. `redact_diff` tracks the current file from the
+unified-diff headers and applies the strict bare-value rule **only** to
+non-source files, where an assignment is configuration and the ambiguity does
+not exist. Source files keep the conservative rule. Both findings are now
+satisfied simultaneously rather than traded off, which is the better answer and
+should have been reached in round 6.
+
+### On the shape of this loop
+
+Seven runs, `BLOCKED` every time, eighteen findings. Rounds 1–2 found real
+fail-opens in the pipeline; round 3 caught a regression the remediation itself
+introduced; rounds 4–7 have been hardening, increasingly of the gate script
+rather than the Phase 5 deliverable.
+
+The gate has no termination condition and each pass over a large diff surfaces
+more. That is not a defect in the gate — several findings were genuine, and this
+round overturned an accepted trade-off correctly. But it does mean a
+non-blocking verdict cannot be assumed to arrive by iterating, and `CLAUDE.md`
+is unambiguous that `BLOCKED` is a failed gate. Deciding when the hardening is
+proportionate is an owner judgement, not one further rounds can settle.

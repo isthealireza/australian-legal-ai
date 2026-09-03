@@ -10,6 +10,8 @@ import pytest
 from legal_ai.answering.errors import AnswerModelUnavailable
 from legal_ai.answering.models import MAX_PROPOSITIONS, GroundedAnswerRequest
 from legal_ai.answering.providers.openrouter import (
+    MAX_COMPLETION_TOKENS,
+    MAX_RESPONSE_BYTES,
     OpenRouterAnswerModel,
     OpenRouterConfig,
     load_openrouter_config,
@@ -175,3 +177,41 @@ def test_proposition_list_at_the_limit_is_accepted() -> None:
     at_limit = {"propositions": [{"statement": "s", "quote": None}] * MAX_PROPOSITIONS}
     draft = _model(json.dumps(at_limit)).answer(_request())
     assert len(draft.propositions) == MAX_PROPOSITIONS
+
+
+def test_oversized_provider_response_is_refused() -> None:
+    """Reported by the review gate as SEC-UNBOUNDED_PROVIDER_RESPONSE.
+
+    The body is bounded before parsing, so a compromised or malfunctioning
+    provider cannot exhaust memory ahead of validation.
+    """
+
+    flood = json.dumps({"propositions": [{"statement": "x" * 2_000_000, "quote": None}]})
+    with pytest.raises(AnswerModelUnavailable):
+        _model(flood).answer(_request())
+
+
+def test_declared_oversized_content_length_is_refused() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"propositions": []}'}}]},
+            headers={"content-length": str(MAX_RESPONSE_BYTES + 1)},
+        )
+
+    model = OpenRouterAnswerModel(CONFIG, transport=httpx.MockTransport(handler))
+    with pytest.raises(AnswerModelUnavailable):
+        model.answer(_request())
+
+
+def test_completion_request_bounds_output_tokens() -> None:
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(json.loads(request.content))
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"propositions":[]}'}}]}
+        )
+
+    OpenRouterAnswerModel(CONFIG, transport=httpx.MockTransport(handler)).answer(_request())
+    assert seen["max_tokens"] == MAX_COMPLETION_TOKENS

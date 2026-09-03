@@ -253,3 +253,26 @@ def test_mock_model_without_entailment_is_permitted(client: TestClient) -> None:
 
     assert client.get("/api/health").json()["answer_model"] == "mock"
     assert client.post("/api/research", json=ANSWERABLE).json()["outcome"] == "ANSWERED"
+
+
+def test_unwritable_audit_log_stops_the_service_without_crashing(tmp_path: Path) -> None:
+    """Reported by the review gate as OPS-AUDIT_SINK_STARTUP_FAILURE.
+
+    An audit trail that cannot be written must stop the service, not crash the
+    process and not answer without auditing.
+    """
+
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory", encoding="utf-8")
+    settings = ApiSettings(
+        corpus_root=RECORDED_FIXTURE_ROOT,
+        audit_log_path=blocker / "nested" / "research.jsonl",
+        provision_root=RECORDED_FIXTURE_ROOT,
+    )
+
+    app = create_app(settings=settings)
+    with TestClient(app) as test_client:
+        assert test_client.get("/api/health").json()["corpus_configured"] is False
+        response = test_client.post("/api/research", json=ANSWERABLE)
+        assert response.status_code == 503
+        assert response.json()["code"] == "AUDIT_SINK_NOT_WRITABLE"

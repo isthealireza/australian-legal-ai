@@ -55,7 +55,7 @@ real client data · any L1+ authority · any change to a Phase 0–4 module.
 uv run ruff check .          # passes, excluding untracked scripts/wf5_structural_lint.py
 uv run ruff format --check . # passes, same exclusion
 uv run mypy .                # passes, same exclusion
-uv run pytest -m "not integration"   # 957 passed, 46 skipped
+uv run pytest -m "not integration"   # 974 passed, 46 skipped
 ```
 
 The exclusion is a pre-existing untracked local file outside this task's scope.
@@ -92,7 +92,7 @@ uv run --locked python scripts/derive_wa_provisions.py \
 
 ## External review gate
 
-The DeepSeek review gate ran six times and returned `BLOCKED` each time. Fifteen
+The DeepSeek review gate ran seven times and returned `BLOCKED` each time. Eighteen
 findings in total, all accepted and fixed with tests:
 
 | Round | Finding | Severity |
@@ -112,10 +112,12 @@ findings in total, all accepted and fixed with tests:
 | 5 | `REVIEW_GATE_SECRET_REDACTION_LOWERCASE_GAP` | medium |
 | 6 | `REVIEW_GATE_PRIVATE_KEY_REDACTION_INCOMPLETE` | critical |
 | 6 | `REVIEW_GATE_LOWERCASE_UNQUOTED_SECRET_GAP` | high |
+| 7 | `SEC-UNBOUNDED_PROVIDER_RESPONSE` | high |
+| 7 | `SEC-REDACTION_BARE_IDENTIFIER_GAP` | high |
+| 7 | `OPS-AUDIT_SINK_STARTUP_FAILURE` | medium |
 
 Details in the ADR 0015 addenda. **The gate has not yet returned a
-non-blocking verdict, so this branch is not ready to merge.** A third run is
-required after these fixes.
+non-blocking verdict, so this branch is not ready to merge.**
 
 ### The one file the gate will not accept
 

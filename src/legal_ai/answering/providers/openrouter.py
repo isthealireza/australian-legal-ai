@@ -39,6 +39,11 @@ DEFAULT_MODEL = "deepseek/deepseek-chat"
 #: still watching, rather than holding the request open indefinitely.
 TIMEOUT = httpx.Timeout(connect=10.0, read=60.0, write=30.0, pool=10.0)
 MAX_PROVISION_CHARS = 60_000
+#: A grounded answer over one provision is small. Bounding both the model's
+#: output and the bytes accepted back stops a compromised or malfunctioning
+#: provider from exhausting memory before validation ever runs.
+MAX_COMPLETION_TOKENS = 2_000
+MAX_RESPONSE_BYTES = 1_048_576
 
 SYSTEM_PROMPT = """You are a legal research assistant for Western Australian legislation.
 
@@ -174,6 +179,7 @@ class OpenRouterAnswerModel:
         body = {
             "model": self._config.model,
             "temperature": 0,
+            "max_tokens": MAX_COMPLETION_TOKENS,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
@@ -196,6 +202,13 @@ class OpenRouterAnswerModel:
 
         if response.status_code != 200:
             raise AnswerModelUnavailable(f"provider returned HTTP {response.status_code}")
+
+        declared = response.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
+            raise AnswerModelUnavailable("provider response exceeds the permitted size")
+        if len(response.content) > MAX_RESPONSE_BYTES:
+            raise AnswerModelUnavailable("provider response exceeds the permitted size")
+
         try:
             payload = response.json()
             content = payload["choices"][0]["message"]["content"]

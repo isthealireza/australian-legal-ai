@@ -16,6 +16,7 @@ from scripts.deepseek_review import (
     MissingConfigurationError,
     PolicyError,
     ReviewTool,
+    redact_diff,
     redact_secrets,
     validate_review_result,
 )
@@ -517,3 +518,65 @@ def test_unquoted_rule_leaves_code_expressions_intact(text: str) -> None:
     """
 
     assert redact_secrets(text) == text
+
+
+def test_bare_secret_in_config_file_is_redacted_but_code_is_not() -> None:
+    """Reported by the review gate as SEC-REDACTION_BARE_IDENTIFIER_GAP.
+
+    A bare identifier-shaped value is a credential in configuration and is
+    ordinary code in a source file. Redaction is therefore file-aware: this is
+    what reconciles it with REDACTION_CORRUPTS_REVIEW_BUNDLE.
+    """
+
+    diff = "\n".join(
+        [
+            "diff --git a/.env.sample b/.env.sample",
+            "--- a/.env.sample",
+            "+++ b/.env.sample",
+            "@@ -1,0 +1,2 @@",
+            "+api_key=supersecretvalue",
+            "+password=plaintextpassword",
+            "diff --git a/src/app.py b/src/app.py",
+            "--- a/src/app.py",
+            "+++ b/src/app.py",
+            "@@ -1,0 +1,3 @@",
+            "+api_key: str",
+            "+api_key = config.api_key",
+            "+token = parse(value)",
+        ]
+    )
+    redacted = redact_diff(diff)
+
+    assert "supersecretvalue" not in redacted
+    assert "plaintextpassword" not in redacted
+    assert "+api_key: str" in redacted
+    assert "+api_key = config.api_key" in redacted
+    assert "+token = parse(value)" in redacted
+
+
+@pytest.mark.parametrize("suffix", [".py", ".ts", ".go", ".rs", ".sql"])
+def test_source_suffixes_keep_the_conservative_rule(suffix: str) -> None:
+    diff = "\n".join(
+        [f"+++ b/src/thing{suffix}", "@@ -1,0 +1,1 @@", "+api_key = some_variable_name"]
+    )
+    assert "some_variable_name" in redact_diff(diff)
+
+
+@pytest.mark.parametrize("suffix", [".env", ".sample", ".cfg", ".ini", ".conf", ".txt"])
+def test_config_suffixes_get_the_strict_rule(suffix: str) -> None:
+    diff = "\n".join([f"+++ b/deploy/settings{suffix}", "@@ -1,0 +1,1 @@", "+api_key=rawsecret123"])
+    assert "rawsecret123" not in redact_diff(diff)
+
+
+def test_diff_redaction_still_covers_token_shapes_in_source_files() -> None:
+    """The conservative rule is not a hole: real key formats are still caught."""
+
+    diff = "\n".join(
+        [
+            "+++ b/src/thing.py",
+            "@@ -1,0 +1,1 @@",
+            '+KEY = "sk-or-v1-000000000000000000000000000000000000"',
+        ]
+    )
+    redacted = redact_diff(diff)
+    assert "sk-or-v1-0000" not in redacted

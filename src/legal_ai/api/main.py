@@ -32,7 +32,7 @@ from ..answering.types import AnswerRefusalCode
 from ..answering.verification import EntailmentVerifier, OpenRouterEntailmentVerifier
 from ..research.audit import ResearchAuditSink
 from ..research.corpus import RecordedWaCorpus
-from ..research.errors import RecordedCorpusError
+from ..research.errors import RecordedCorpusError, ResearchAuditSinkUnavailable
 from ..research.service import WaResearchService
 from .routes import health, research
 from .settings import AnswerModelChoice, ApiSettings, load_settings
@@ -118,19 +118,25 @@ def _answer_service(
     settings: ApiSettings,
     model: LegalAnswerModel,
     verifier: EntailmentVerifier | None,
-) -> GroundedAnswerService | None:
-    """Wire the pipeline, or return None when no corpus is configured."""
+) -> GroundedAnswerService | AnswerRefusalCode:
+    """Wire the pipeline, or return the code explaining why it is unavailable."""
 
     if settings.corpus_root is None:
-        return None
+        return AnswerRefusalCode.CORPUS_UNAVAILABLE
     try:
         corpus = RecordedWaCorpus(settings.corpus_root)
     except RecordedCorpusError:
         # An unreadable corpus is reported as unavailable rather than crashing
         # the process or silently answering from nothing.
-        return None
+        return AnswerRefusalCode.CORPUS_UNAVAILABLE
+    try:
+        audit_sink = _audit_sink(settings)
+    except ResearchAuditSinkUnavailable:
+        # An audit trail that cannot be written is a stopped service, not a
+        # crashed process and not a service that answers without auditing.
+        return AnswerRefusalCode.AUDIT_SINK_NOT_WRITABLE
     return GroundedAnswerService(
-        research=WaResearchService(corpus=corpus, audit_sink=_audit_sink(settings)),
+        research=WaResearchService(corpus=corpus, audit_sink=audit_sink),
         model=model,
         provisions=_provision_store(settings),
         verifier=verifier,
@@ -151,9 +157,12 @@ def create_app(
 
     app = FastAPI(title=TITLE, summary=SUMMARY, version="0.2.0")
     config_error = _configuration_error(resolved, entailment)
-    service = None if config_error else _answer_service(resolved, answer_model, entailment)
+    wired = config_error or _answer_service(resolved, answer_model, entailment)
+    service = wired if isinstance(wired, GroundedAnswerService) else None
     app.state.answer_service = service
-    app.state.unavailable_code = config_error or AnswerRefusalCode.CORPUS_UNAVAILABLE
+    app.state.unavailable_code = (
+        AnswerRefusalCode.CORPUS_UNAVAILABLE if service is not None else wired
+    )
     app.state.corpus_configured = service is not None
     app.state.answer_model_name = getattr(answer_model, "name", type(answer_model).__name__)
     app.state.entailment_verified = entailment is not None

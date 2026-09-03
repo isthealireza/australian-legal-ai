@@ -28,6 +28,7 @@ _UNAVAILABLE = frozenset(
         AnswerRefusalCode.CORPUS_UNAVAILABLE,
         AnswerRefusalCode.VERIFIER_NOT_CONFIGURED,
         AnswerRefusalCode.ENTAILMENT_REQUIRED_FOR_LIVE_MODEL,
+        AnswerRefusalCode.AUDIT_SINK_NOT_WRITABLE,
     }
 )
 
