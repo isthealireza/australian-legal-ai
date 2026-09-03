@@ -14,3 +14,4 @@ Governance standardization accepts: [0011 Governance and engineering terminology
 Phase 3 accepts: [0012 Matter Evidence Vault and Safe Upload Boundary](0012-matter-evidence-vault-and-upload-boundary.md).
 Phase 4 accepts: [0013 Phase 4 Research and Evidence Packets](0013-phase-4-research-evidence-packets.md).
 Orchestration foundation proposes: [0016 Agent orchestration foundation](0016-agent-orchestration-foundation.md).
+Corpus expansion proposes: [0017 WA corpus expansion invariants, phases and gates](0017-wa-corpus-expansion-invariants.md).
