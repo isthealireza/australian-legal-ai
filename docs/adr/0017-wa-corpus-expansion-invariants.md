@@ -147,9 +147,11 @@ Generate the manifest deterministically. Extract section text offline with
 because extraction reproducibility depends on it. Then the human verification
 gate. Then promotion.
 
-No step involves a model. Ingestion, hashing, digest chaining, selection,
-pinpoint matching and quote checking are deterministic code, permanently
-(`PROJECT_GOVERNANCE.md` §2.3).
+No step involves a model. Ingestion, hashing, digest chaining, selection and
+pinpoint matching are deterministic code today and must stay that way
+(`PROJECT_GOVERNANCE.md` §2.3). Quote checking is **not implemented**: I15
+records it as new contract surface for E5, and the same rule will bind it when
+it exists.
 
 ### 6. Feature flag and rollback
 

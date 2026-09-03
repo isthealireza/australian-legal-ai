@@ -254,6 +254,10 @@ def test_one_validated_audit_event_per_evaluation(identifier: str, pinpoint: str
     assert event.source_id == GOLDEN_SOURCE_ID
     assert event.sha256 == GOLDEN_PDF_SHA256
     assert event.refusal_code is None
+    assert event.requested_jurisdiction == GOLDEN_JURISDICTION
+    assert event.requested_act_title == GOLDEN_ACT_TITLE
+    assert event.requested_provision_identifier == identifier
+    assert event.requested_pinpoint == pinpoint
 
 
 # ---------------------------------------------------------------------------
@@ -271,11 +275,28 @@ def test_recorded_sections_are_exactly_ss_55_and_56() -> None:
     assert recorded == _GOLDEN_SECTIONS
 
 
-def test_recorded_section_text_matches_its_recorded_digest() -> None:
-    """Pins the bytes without reproducing the text: I8 in ADR 0017."""
+def test_recorded_section_text_matches_the_golden_digest() -> None:
+    """Pins the bytes without reproducing the text: I8 in ADR 0017.
 
-    for section in _source().sections:
-        assert hashlib.sha256(section.text.encode("utf-8")).hexdigest() == section.text_sha256
+    The digest is recomputed from the text and compared to the **golden
+    literal**, not to the fixture's own recorded `text_sha256`. Comparing a
+    fixture value to itself would still pass if the text and its recorded digest
+    were changed together, which is exactly the drift this module exists to
+    catch.
+    """
+
+    expected = {
+        GOLDEN_S55_IDENTIFIER: GOLDEN_S55_TEXT_SHA256,
+        GOLDEN_S56_IDENTIFIER: GOLDEN_S56_TEXT_SHA256,
+    }
+    sections = _source().sections
+    assert {section.identifier for section in sections} == set(expected)
+    for section in sections:
+        computed = hashlib.sha256(section.text.encode("utf-8")).hexdigest()
+        assert computed == expected[section.identifier]
+        # The fixture must also agree with itself; a mismatch here means the
+        # recorded digest and the recorded text have diverged.
+        assert section.text_sha256 == expected[section.identifier]
 
 
 def test_recorded_sections_remain_unverified() -> None:
@@ -315,6 +336,10 @@ def test_refusal_codes_are_frozen(
     assert event.refusal_code is code
     assert event.source_id is None
     assert event.sha256 is None
+    assert event.requested_jurisdiction == GOLDEN_JURISDICTION
+    assert event.requested_act_title == GOLDEN_ACT_TITLE
+    assert event.requested_provision_identifier == identifier
+    assert event.requested_pinpoint == pinpoint
 
 
 def test_a_different_act_still_refuses_as_missing_retrieval() -> None:
@@ -341,15 +366,29 @@ def test_a_non_wa_jurisdiction_still_refuses() -> None:
 
 
 def test_repeated_evaluation_is_identical() -> None:
+    """Repeatability only. The literal freezing is done by the tests above.
+
+    This compares two evaluations to each other, so it would still pass after a
+    self-consistent fixture change. It is here to catch nondeterminism, not
+    drift, and it is anchored to one golden literal so it cannot pass against a
+    wholly different source.
+    """
+
     first = _packet(GOLDEN_S55_IDENTIFIER, GOLDEN_S55_PINPOINT)
     second = _packet(GOLDEN_S55_IDENTIFIER, GOLDEN_S55_PINPOINT)
     assert first == second
+    assert first.sha256 == GOLDEN_PDF_SHA256
 
 
 def test_fresh_corpus_instances_agree() -> None:
-    """Loading order and instance identity must not affect the recorded result."""
+    """Loading order and instance identity must not affect the recorded result.
+
+    Relational, like the test above, and anchored to a golden literal.
+    """
 
     left = _corpus().select(recorded_query())
     right = _corpus().select(recorded_query())
     assert left == right
     assert left is not right
+    assert left is not None
+    assert left.source_id == GOLDEN_SOURCE_ID
