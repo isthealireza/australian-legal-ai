@@ -1,13 +1,13 @@
-# ADR 0015: Derived Provision Text, a Live Provider, and Entailment Verification
+# ADR 0020: Derived Provision Text, a Live Provider, and Entailment Verification
 
 - Status: Proposed
 - Date: 2026-09-02
 - Accepted: not yet accepted — owner authorisation required before merge
-- Builds on: [ADR 0013](0013-phase-4-research-evidence-packets.md), [ADR 0014](0014-phase-5-grounded-answering-and-read-only-api.md)
+- Builds on: [ADR 0013](0013-phase-4-research-evidence-packets.md), [ADR 0019](0019-phase-5-grounded-answering-and-read-only-api.md)
 
 ## Context
 
-ADR 0014 delivered the grounded answering pipeline with a mock adapter. It
+ADR 0019 delivered the grounded answering pipeline with a mock adapter. It
 worked, but it could not be useful, for one structural reason: a validated
 `WaEvidencePacket` carries the bytes of a *whole instrument*. For the pilot
 corpus that is a 1.29 MB consolidated PDF, 263 pages. No model can be handed
@@ -538,6 +538,6 @@ Phase 5 deliverable passes. The review-gate repair is on
 to that tooling; it must be reviewed and merged on its own terms.
 
 Two items still require the owner rather than further engineering: accepting
-ADR 0014 and ADR 0015, which are `Proposed`, and deciding whether the two low
+ADR 0019 and ADR 0020, which are `Proposed`, and deciding whether the two low
 findings above are genuinely acceptable. `AGENTS.md` reserves merge for the
 owner's explicit instruction, so nothing is merged and nothing is pushed.

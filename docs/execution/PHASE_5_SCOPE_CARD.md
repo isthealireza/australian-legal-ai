@@ -1,7 +1,7 @@
 # Phase 5 Scope Card — Grounded Answering, Read-Only API, and a Live Provider
 
 **Branch:** `feat/phase-5-grounded-answer-api`
-**Governing decisions:** [ADR 0014](../adr/0014-phase-5-grounded-answering-and-read-only-api.md) · [ADR 0015](../adr/0015-derived-provision-text-live-provider-and-entailment.md) (both Proposed)
+**Governing decisions:** [ADR 0019](../adr/0019-phase-5-grounded-answering-and-read-only-api.md) · [ADR 0020](../adr/0020-derived-provision-text-live-provider-and-entailment.md) (both Proposed)
 **Authority level:** L0 — deterministic, read-only
 **Status:** implemented, validated, **PASSED** by the external review gate; awaiting ADR acceptance and an explicit merge instruction
 
@@ -23,7 +23,7 @@ explicit refusal.
 | `static/` | Single-page interface with the required permanent notices |
 | `scripts/derive_wa_provisions.py` | Operator tool deriving provision text from the verified PDF |
 | `tests/answering/`, `tests/api/` | 99 unit and HTTP contract tests |
-| `docs/adr/0014-*.md`, `docs/adr/0015-*.md` | Decision records |
+| `docs/adr/0019-*.md`, `docs/adr/0020-*.md` | Decision records |
 
 ## Out of scope — deliberately not done
 
@@ -74,7 +74,7 @@ uv run uvicorn legal_ai.api.main:create_app --factory --port 8099
 ```
 
 Live model. Entailment verification is **required** with a live provider
-(ADR 0015 addendum 5), so both variables are needed:
+(ADR 0020 addendum 5), so both variables are needed:
 
 ```
 LEGAL_AI_ANSWER_MODEL=openrouter
@@ -94,7 +94,7 @@ uv run --locked python scripts/derive_wa_provisions.py \
 The gate was invoked nine times. It returned `BLOCKED` on the first eight and
 `PASS` on the merge candidate. Twenty-four findings were remediated with tests
 along the way; the eighteen from the entangled rounds are listed here, and the
-later ones are in the ADR 0015 addenda 7 to 12.
+later ones are in the ADR 0020 addenda 7 to 12.
 
 | Round | Finding | Severity |
 |---|---|---|
@@ -121,16 +121,16 @@ later ones are in the ADR 0015 addenda 7 to 12.
 
 **`PASS`** on 2026-09-02. No critical or high findings. The four
 non-blocking findings that accompanied the pass (one medium, three low) were
-closed rather than carried — see the ADR 0015 addendum 11. The reviewer recorded
+closed rather than carried — see the ADR 0020 addendum 11. The reviewer recorded
 that the pipeline is fail-closed, citations are deterministically validated,
 provider responses are bounded, and audit-sink failure stops the service.
 
 Two low-severity findings remain open and accepted, both concerning
 operator-set local configuration and neither affecting the answering path; see
-the ADR 0015 addendum 12.
+the ADR 0020 addendum 12.
 
 Reaching that verdict took nine gate invocations and twenty-four remediated
-findings, recorded in the ADR 0015 addenda. It also required separating two tasks that had become
+findings, recorded in the ADR 0020 addenda. It also required separating two tasks that had become
 entangled: the review-gate repair now lives on `chore/deepseek-review-gate-repair`
 and is **still BLOCKED**, on findings confined to the gate script itself. That
 branch must not be merged on this branch's verdict.
@@ -149,7 +149,7 @@ credential:
 +DEEPSEEK_API_KEY=
 +DEEPSEEK_MODEL=
 +
-+# Read-only research API (ADR 0014, ADR 0015). Paths are relative to the repo.
++# Read-only research API (ADR 0019, ADR 0020). Paths are relative to the repo.
 +LEGAL_AI_WA_CORPUS_ROOT=
 +LEGAL_AI_PROVISION_ROOT=
 +LEGAL_AI_RESEARCH_AUDIT_LOG=

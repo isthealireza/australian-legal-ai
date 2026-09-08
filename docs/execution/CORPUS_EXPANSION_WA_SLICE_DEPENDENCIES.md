@@ -9,7 +9,7 @@ script relies on.
 
 Both modules are already recorded as reviewed: `legal_ai.research.types`
 (pure constants, ADR 0013 §3) and `scripts/derive_wa_provisions.py` (operator
-tool delivered and gate-PASSed under the Phase 5 task, ADR 0015). Neither is
+tool delivered and gate-PASSed under the Phase 5 task, ADR 0020). Neither is
 modified by this task.
 
 ## 1. `legal_ai.research.types.WA_ALLOWLISTED_HOSTS` (verbatim, committed at 84e4ddc)

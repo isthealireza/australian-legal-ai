@@ -1,4 +1,4 @@
-# ADR 0014: Phase 5 Grounded Answering and the Read-Only Research API
+# ADR 0019: Phase 5 Grounded Answering and the Read-Only Research API
 
 - Status: Proposed
 - Date: 2026-09-02

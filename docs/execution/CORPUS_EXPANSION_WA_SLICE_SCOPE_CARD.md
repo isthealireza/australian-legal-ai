@@ -2,7 +2,7 @@
 
 **Branch:** `feat/corpus-expansion-wa-slice`
 **Base:** `84e4ddc` (committed baseline; commits `c068500`, `84e4ddc` untouched)
-**Governing decisions:** [ADR 0013](../adr/0013-phase-4-research-evidence-packets.md) (accepted), [ADR 0014](../adr/0014-phase-5-grounded-answering-and-read-only-api.md), [ADR 0015](../adr/0015-derived-provision-text-live-provider-and-entailment.md) (proposed)
+**Governing decisions:** [ADR 0013](../adr/0013-phase-4-research-evidence-packets.md) (accepted), [ADR 0019](../adr/0019-phase-5-grounded-answering-and-read-only-api.md), [ADR 0020](../adr/0020-derived-provision-text-live-provider-and-entailment.md) (proposed)
 **Authority level:** L0 — deterministic, read-only. Official-source PDF acquisition only.
 **Owner approval:** candidate list + provisional slices approved 2026-09-08; `scripts/ingest_wa_act.py` approved as part of this card.
 **Status:** implemented, gates green, review gate **PASS** (2026-09-08, recorded `review-20260908T044802962227Z-50581363.json`); committed `c874ff8` + `eda2c2c`.
