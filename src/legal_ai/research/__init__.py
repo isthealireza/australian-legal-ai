@@ -1,7 +1,7 @@
-"""Phase 4 Slice 1: deterministic, read-only WA research over recorded fixtures.
+"""Phase 4 WA research over recorded fixtures (Slices 1 and 2).
 
-Standalone module per ADR 0013. No live retrieval, no network access, no model
-use, no persistence, and no production wiring.
+Standalone module per ADR 0013 and ADR 0014. No live retrieval, no network
+access, no model use, no persistence, and no production wiring.
 """
 
 from .audit import ResearchAuditEvent, ResearchAuditSink
@@ -15,6 +15,7 @@ from .errors import (
 from .models import (
     ActIdentity,
     RecordedProvision,
+    RecordedSection,
     RecordedWaSource,
     ResearchQuery,
     WaEvidencePacket,
@@ -47,6 +48,7 @@ __all__ = [
     "LegalStatus",
     "RecordedCorpusError",
     "RecordedProvision",
+    "RecordedSection",
     "RecordedSourceCorpus",
     "RecordedWaCorpus",
     "RecordedWaSource",
