@@ -5,6 +5,7 @@
 **Governing decisions:** [ADR 0013](../adr/0013-phase-4-research-evidence-packets.md) (accepted), [ADR 0014](../adr/0014-phase-5-grounded-answering-and-read-only-api.md), [ADR 0015](../adr/0015-derived-provision-text-live-provider-and-entailment.md) (proposed)
 **Authority level:** L0 — deterministic, read-only. Official-source PDF acquisition only.
 **Owner approval:** candidate list + provisional slices approved 2026-09-08; `scripts/ingest_wa_act.py` approved as part of this card.
+**Status:** implemented, gates green, review gate **PASS** (2026-09-08, recorded `review-20260908T044802962227Z-50581363.json`); committed `c874ff8` + `eda2c2c`.
 
 ## Goal
 
