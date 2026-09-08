@@ -37,6 +37,28 @@ push, no amend, no drop. Resolve the ADR-README conflict; renumber our ADRs.
 No feature work, no new fixtures, no refactor. `src/legal_ai/research/corpus.py`,
 `models.py` and the section-records path are main's (Phase 4 Slice 2), taken as-is.
 
+## ADR renumber verification (rename + deletion)
+
+Per owner decision 1, the two Phase 5 ADR files were renamed (git mv, content
+unchanged) and the old filenames were removed:
+
+| Old (renamed away) | New (renamed to) |
+|---|---|
+| `docs/adr/0014-phase-5-grounded-answering-and-read-only-api.md` | `docs/adr/0019-phase-5-grounded-answering-and-read-only-api.md` |
+| `docs/adr/0015-derived-provision-text-live-provider-and-entailment.md` | `docs/adr/0020-derived-provision-text-live-provider-and-entailment.md` |
+
+Verified on the merge branch HEAD (`git ls-files docs/adr/`):
+
+- The two old filenames are **absent** — no file named `0014-phase-5-grounded-*`
+  or `0015-derived-*` remains tracked.
+- The two new filenames `0019-phase-5-*` and `0020-derived-*` are present.
+- main's `0014-phase-4-slice-2-*` and `0015-phase-5-slice-1-*` remain, untouched.
+
+There is therefore exactly one file per ADR number; no duplicate ADR file name
+exists in the merged tree. The old files were not left as unreferenced copies:
+they were removed by the rename. (This is a documentation/verification note; the
+rename is also expressed by git's rename detection in the diff.)
+
 ## Validation notes
 
 - ruff / ruff format --check / mypy: green.
