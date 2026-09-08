@@ -79,19 +79,51 @@ here; do not implement.
 6. All repository gates pass; review gate PASS.
 7. Repository rules respected; both existing commits untouched.
 
-## Validation (to run)
+## Validation (run; real results recorded after remediation)
 
 ```
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy .
-uv run pytest -m "not integration" -q
+uv run ruff check .           # All checks passed (0 errors)
+uv run ruff format --check . # 173 files already formatted (0 would reformat)
+uv run mypy .                # Success: no issues found in 173 source files
+uv run pytest -m "not integration" -q    # 1082 passed, 47 skipped, 100 deselected
 ```
-then
+
+The test suite includes these named additions (from verbose run):
+
+- `tests/scripts/test_ingest_wa_act.py` — 16 tests: happy path parametrized over
+  all four recorded PDFs; `--expected-sha256` missing; digest mismatch; redirect
+  to non-allowlisted host; atomicity (no dir, no `*.tmp` after refusal);
+  wrong-host http/https; missing text layer; existing dir; all/partial section
+  missing; malformed identifier.
+- `tests/research/test_recorded_fixture_corpus_slice.py` — 39 tests:
+  validated packet per pinned provision (11), unmodified bytes (3), exact
+  single-title selection (3), derivation digest chain (11, incl. parent==packet
+  sha256), and derived-text-units-are-substrings-of-source-document (11).
+- `tests/scripts/` collects `11` new tests after this task (the full test count
+  rises from 1076 to 1082).
+
+Review gate invocations:
 ```
-scripts/deepseek_review.py --dry-run --json   (inspect redacted bundle)
-scripts/deepseek_review.py (live, key present in env)
+scripts/deepseek_review.py --dry-run --json   (done; bundle inspected)
+scripts/deepseek_review.py (live)             (done; verdict recorded in scope card)
 ```
+
+## Binary PDF fixtures and the review gate
+
+`scripts/deepseek_review.py` refuses to transmit binary files, so the three
+recorded PDFs are never part of a review bundle. Their integrity is proven
+instead by two independent mechanisms, both in the bundle:
+
+- the digest chain tests recompute the SHA-256 from the committed stored bytes
+  and assert it equals the manifest digest for every Act and provision; and
+- [CORPUS_EXPANSION_WA_SLICE_DIGESTS.md](CORPUS_EXPANSION_WA_SLICE_DIGESTS.md)
+  records that each PDF was downloaded a second time, fresh, from the official
+  host into a temporary directory outside the repository on 2026-09-08, and
+  that the re-download SHA-256 matched the committed manifest byte-for-byte.
+
+The two pre-existing modules the ingestion script imports are snapshotted
+verbatim for review in
+[CORPUS_EXPANSION_WA_SLICE_DEPENDENCIES.md](CORPUS_EXPANSION_WA_SLICE_DEPENDENCIES.md).
 
 ## Rollback
 

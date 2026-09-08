@@ -11,7 +11,7 @@
     ],
     "tool": "scripts/ingest_wa_act.py"
   },
-  "derived_at_utc": "2026-09-08T03:55:57Z",
+  "derived_at_utc": "2026-09-08T04:19:05Z",
   "file": "s_5.txt",
   "heading": "Terms used",
   "jurisdiction": "WA",
@@ -19,7 +19,7 @@
     "Derived text, not official bytes. The official source is the parent PDF.",
     "Quotes are validated against this file's recorded digest."
   ],
-  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a525.html&view=consolidated",
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a525.html",
   "parent_sha256": "d91d26a14da9be42c0c477c4ae15a8e9171d11ae68ea5fc77889042a2a1e9990",
   "parent_source_id": "wa_legislation:motor_vehicle_dealers_act_1973:consolidated:06-k0-01",
   "pinpoint": "section 5",

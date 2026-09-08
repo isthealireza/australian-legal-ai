@@ -27,7 +27,7 @@ Phase 4/5 research corpus.
   `mrdoc_46833`.
 - **Currency:** start **01 Feb 2024**; end **Current** (in force
   at retrieval).
-- **Retrieved (UTC):** `2026-09-08T03:55:31Z`
+- **Retrieved (UTC):** `2026-09-08T04:18:09Z`
 - **SHA-256:** `9d78bc1fc594d61af5ec095c03d18b7c266aeb8fe52fd776611dee57574edd5b`
 
 ## Pinned provisions

@@ -11,7 +11,7 @@
     ],
     "tool": "scripts/ingest_wa_act.py"
   },
-  "derived_at_utc": "2026-09-08T03:56:19Z",
+  "derived_at_utc": "2026-09-08T04:19:31Z",
   "file": "s_4.txt",
   "heading": "Term used: owner-driver",
   "jurisdiction": "WA",
@@ -19,7 +19,7 @@
     "Derived text, not official bytes. The official source is the parent PDF.",
     "Quotes are validated against this file's recorded digest."
   ],
-  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a146614.html&view=consolidated",
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a146614.html",
   "parent_sha256": "03071c9fe15dfdc3a8c26ebfd9027f5ff6044f91c83e0455ace5b5ac40b43bad",
   "parent_source_id": "wa_legislation:owner_drivers_contracts_and_disputes_act_2007:consolidated:01-g0-00",
   "pinpoint": "section 4",

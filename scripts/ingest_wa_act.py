@@ -17,19 +17,24 @@ Operator tool, not product runtime. One command records one new Act:
         --pdf-url \
             "https://www.legislation.wa.gov.au/legislation/statutes.nsf/"
             "RedirectURL?OpenAgent&query=mrdoc_48249.pdf" \
-        --sections "s 4,s 6,s 7"
+        --sections "s 4,s 6,s 7" \
+        --expected-sha256 \
+            03071c9fe15dfdc3a8c26ebfd9027f5ff6044f91c83e0455ace5b5ac40b43bad
 
 The tool downloads the official consolidated PDF byte-exact, verifies the
-text layer and (optionally) the caller-supplied digest, chooses the verbatim
-heading of every requested section from the extracted text, and records only
-the sections that actually exist there. All writes stay inside
-`<root>/<slug>/`; the manifest records the real bytes, the real digest and
-the real retrieval timestamp of the run.
+text layer and the caller-supplied digest, chooses the verbatim heading of
+every requested section from the extracted text, and records only the
+sections that actually exist there. All writes stay inside `<root>/<slug>/`;
+the manifest records the real bytes, the real digest and the real retrieval
+timestamp of the run. The fixture directory is assembled in memory, written to
+a temporary directory inside the root, and atomically renamed into place only
+after every consistency check has passed, so a refused or failed run leaves
+the root pristine.
 
 Fail closed (recorded text is data, never instruction): a section that cannot
 be located is DROPPED and reported as MISSING rather than invented; a digest
-mismatch, a missing text layer, or an all-missing slice refuses the whole
-run before anything is written.
+mismatch, a missing text layer, a non-allowlisted final host, or an
+all-missing slice refuses the whole run before anything is written.
 
 The HTTP client is injectable so offline tests can serve recorded fixture
 bytes through ``httpx.MockTransport``; the default is a real client that
@@ -46,6 +51,7 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -55,14 +61,14 @@ from urllib.parse import urlsplit
 import httpx
 import pypdf
 
-from legal_ai.research.types import WA_ALLOWLISTED_HOSTS
-
 # Running ``python scripts/ingest_wa_act.py`` puts only ``scripts/`` on
-# sys.path, so the repo root must be added for ``scripts.derive_wa_provisions``.
+# sys.path, so the repo root must be added before any ``legal_ai`` or
+# ``scripts`` import is executed.
 _REPO_ROOT = str(Path(__file__).resolve().parents[1])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+from legal_ai.research.types import WA_ALLOWLISTED_HOSTS  # noqa: E402
 from scripts.derive_wa_provisions import (  # noqa: E402
     _UNIT_START,
     DERIVATION_STEPS,
@@ -80,7 +86,10 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _MRDOC = re.compile(r"mrdoc_\d+")
 _TRAILING_PAGE_NUMBER = re.compile(r" \d+$")
 _SLUG = re.compile(r"^[a-z0-9_]+$")
-_NON_SECTION_LINE = re.compile(r"^\d+[A-Z]*\.\s+\S")
+
+#: Upper bound for the recorded source content, matching MAX_SOURCE_CONTENT_BYTES
+#: in the evidence-packet contract. The download is held in memory only.
+MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
 
 _TYPE_PREFIX = "wa_legislation:"
 _ENCODING_NOTE = (
@@ -139,9 +148,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--expected-sha256",
-        default="",
-        help="optional exact lowercase sha256 of the downloaded bytes; any mismatch "
-        "refuses the run",
+        required=True,
+        help="exact lowercase sha256 of the official bytes; any mismatch refuses the run",
     )
     parser.add_argument(
         "--sections",
@@ -363,10 +371,11 @@ def _run(args: argparse.Namespace, client: httpx.Client | None) -> int:
             "--slug must be a plain lowercase directory name (letters, digits, underscores)"
         )
     target = root / slug
-    if target.exists():
+    temp_dir = root / f".{slug}.tmp"
+    if target.exists() or temp_dir.exists():
         raise _Refusal(
-            f"fixture directory already exists: {target}; refusing to overwrite a recorded fixture "
-            "(delete it explicitly to re-ingest)"
+            f"fixture directory already exists: {target}; refusing to overwrite a "
+            "recorded fixture (delete it explicitly to re-ingest)"
         )
 
     act_title = str(args.act_title).strip()
@@ -391,15 +400,13 @@ def _run(args: argparse.Namespace, client: httpx.Client | None) -> int:
         reason = _url_refusal(value)
         if reason is not None:
             raise _Refusal(f"{label}: {reason}")
-    official_source_url = (
-        act_page_url
-        if "&view=consolidated" in act_page_url
-        else f"{act_page_url}&view=consolidated"
-    )
+    # The official source URL is the act page verbatim; it already is a valid,
+    # allowlisted HTTPS URL and must not be re-written with a query suffix.
+    official_source_url = act_page_url
     document_id = _mrdoc_document_id(pdf_url)
 
     expected = str(args.expected_sha256).strip()
-    if expected and _SHA256.fullmatch(expected) is None:
+    if _SHA256.fullmatch(expected) is None:
         raise _Refusal("--expected-sha256 must be exactly 64 lowercase hexadecimal characters")
 
     actual_client = (
@@ -421,11 +428,16 @@ def _run(args: argparse.Namespace, client: httpx.Client | None) -> int:
         raise _Refusal(f"resolved file URL: {reason}")
 
     content = response.content
+    if len(content) > MAX_DOWNLOAD_BYTES:
+        raise _Refusal(
+            f"downloaded content exceeds the {MAX_DOWNLOAD_BYTES}-byte limit "
+            f"({len(content)} bytes); refusing"
+        )
     if not content.startswith(b"%PDF"):
         raise _Refusal("downloaded bytes do not start with the %PDF signature")
     byte_length = len(content)
     sha256 = hashlib.sha256(content).hexdigest()
-    if expected and expected != sha256:
+    if expected != sha256:
         raise _Refusal(
             f"digest mismatch: expected {expected} but the downloaded bytes hash to {sha256}"
         )
@@ -524,14 +536,25 @@ def _run(args: argparse.Namespace, client: httpx.Client | None) -> int:
         ],
     }
 
-    target.mkdir(parents=True, exist_ok=False)
-    provisions_dir = target / "provisions"
-    provisions_dir.mkdir(exist_ok=True)
-    with target.joinpath(manifest_name).open("w", encoding="utf-8", newline="\n") as handle:
-        json.dump(manifest, handle, indent=2)
-
+    # Build every artifact fully in memory and run every consistency check
+    # before anything touches the filesystem.
+    readme_text = _readme(
+        act_title,
+        act_number,
+        assent,
+        suffix,
+        document_id,
+        currency_start,
+        retrieved_at_utc,
+        sha256,
+        file_base,
+        confirmed,
+    )
     derived_at_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    provision_records: list[tuple[str, str, dict[str, Any]]] = []
     for identifier, number, heading, body in confirmed:
+        text_bytes = body.encode("utf-8")
+        leaf = identifier.replace(" ", "_").replace(".", "")
         record: dict[str, Any] = {
             "parent_source_id": source_id,
             "parent_sha256": sha256,
@@ -551,32 +574,49 @@ def _run(args: argparse.Namespace, client: httpx.Client | None) -> int:
                 "Derived text, not official bytes. The official source is the parent PDF.",
                 "Quotes are validated against this file's recorded digest.",
             ],
+            "file": f"{leaf}.txt",
+            "sha256": hashlib.sha256(text_bytes).hexdigest(),
+            "byte_length": len(text_bytes),
         }
-        written = _write(provisions_dir, identifier, body, record)
-        assert record["parent_sha256"] == manifest["sha256"]
-        assert (
-            record["sha256"]
-            == hashlib.sha256((provisions_dir / record["file"]).read_bytes()).hexdigest()
-        )
-        print(f"  provision {identifier}: {record['byte_length']} bytes -> {written.name}")
+        if record["parent_sha256"] != manifest["sha256"]:
+            raise _Refusal(
+                "internal inconsistency: a provision parent digest does not match the manifest"
+            )
+        if hashlib.sha256(text_bytes).hexdigest() != record["sha256"]:
+            raise _Refusal(
+                f"internal inconsistency: {identifier} text digest does not match its record"
+            )
+        if record["byte_length"] != len(text_bytes):
+            raise _Refusal(
+                f"internal inconsistency: {identifier} byte length does not match its text"
+            )
+        provision_records.append((identifier, body, record))
 
-    target.joinpath(pdf_filename).write_bytes(content)
-    target.joinpath("README.md").write_text(
-        _readme(
-            act_title,
-            act_number,
-            assent,
-            suffix,
-            document_id,
-            currency_start,
-            retrieved_at_utc,
-            sha256,
-            file_base,
-            confirmed,
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
+    # Atomic commit: stage into a fresh temp directory inside the corpus root,
+    # verify the staged PDF bytes against the recorded digest, then rename into
+    # place. Any failure before the rename removes the temp directory so the
+    # root stays pristine.
+    try:
+        temp_dir.mkdir(parents=True, exist_ok=False)
+        temp_provisions = temp_dir / "provisions"
+        temp_provisions.mkdir(exist_ok=False)
+        (temp_dir / manifest_name).write_text(
+            json.dumps(manifest, indent=2), encoding="utf-8", newline="\n"
+        )
+        for identifier, body, record in provision_records:
+            written = _write(temp_provisions, identifier, body, record)
+            print(f"  provision {identifier}: {record['byte_length']} bytes -> {written.name}")
+        (temp_dir / pdf_filename).write_bytes(content)
+        if hashlib.sha256((temp_dir / pdf_filename).read_bytes()).hexdigest() != sha256:
+            raise _Refusal(
+                "internal inconsistency: staged PDF bytes do not match the recorded digest"
+            )
+        (temp_dir / "README.md").write_text(readme_text, encoding="utf-8", newline="\n")
+        temp_dir.rename(target)
+    except Exception:
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
+        raise
 
     print(f"INGESTED {act_title} [{suffix}] -> {target}")
     print(f"  file: {pdf_filename} ({byte_length} bytes; sha256 {sha256})")

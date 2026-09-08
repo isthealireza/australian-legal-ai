@@ -11,7 +11,7 @@
     ],
     "tool": "scripts/ingest_wa_act.py"
   },
-  "derived_at_utc": "2026-09-08T03:55:39Z",
+  "derived_at_utc": "2026-09-08T04:18:32Z",
   "file": "s_25.txt",
   "heading": "Response to payment claim: payment schedule",
   "jurisdiction": "WA",
@@ -19,7 +19,7 @@
     "Derived text, not official bytes. The official source is the parent PDF.",
     "Quotes are validated against this file's recorded digest."
   ],
-  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a147300.html&view=consolidated",
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a147300.html",
   "parent_sha256": "9d78bc1fc594d61af5ec095c03d18b7c266aeb8fe52fd776611dee57574edd5b",
   "parent_source_id": "wa_legislation:building_and_construction_industry_security_of_payment_act_2021:consolidated:00-e0-00",
   "pinpoint": "section 25",

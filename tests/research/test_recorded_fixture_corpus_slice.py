@@ -14,8 +14,10 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
+from scripts.derive_wa_provisions import NEWLINE, _document_lines
 
 from legal_ai.research.corpus import RecordedWaCorpus
 from legal_ai.research.service import ResearchValidated, WaResearchService
@@ -33,9 +35,9 @@ _RECORDS = {
         "004 of 2021",
         date(2024, 2, 1),
         date(2024, 2, 1),
-        datetime(2026, 9, 8, 3, 55, 31, tzinfo=UTC),
+        datetime(2026, 9, 8, 4, 18, 9, tzinfo=UTC),
         "9d78bc1fc594d61af5ec095c03d18b7c266aeb8fe52fd776611dee57574edd5b",
-        "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a147300.html&view=consolidated",
+        "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a147300.html",
         "building_and_construction_industry_security_of_payment_act_2021_consolidated_00-e0-00.pdf",
     ),
     "motor_vehicle_dealers_act_1973": (
@@ -45,9 +47,9 @@ _RECORDS = {
         "101 of 1973",
         date(2022, 7, 1),
         date(2022, 7, 1),
-        datetime(2026, 9, 8, 3, 55, 50, tzinfo=UTC),
+        datetime(2026, 9, 8, 4, 18, 48, tzinfo=UTC),
         "d91d26a14da9be42c0c477c4ae15a8e9171d11ae68ea5fc77889042a2a1e9990",
-        "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a525.html&view=consolidated",
+        "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a525.html",
         "motor_vehicle_dealers_act_1973_consolidated_06-k0-01.pdf",
     ),
     "owner_drivers_contracts_and_disputes_act_2007": (
@@ -57,9 +59,9 @@ _RECORDS = {
         "007 of 2007",
         date(2025, 1, 31),
         date(2025, 1, 31),
-        datetime(2026, 9, 8, 3, 56, 15, tzinfo=UTC),
+        datetime(2026, 9, 8, 4, 19, 20, tzinfo=UTC),
         "03071c9fe15dfdc3a8c26ebfd9027f5ff6044f91c83e0455ace5b5ac40b43bad",
-        "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a146614.html&view=consolidated",
+        "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a146614.html",
         "owner_drivers_contracts_and_disputes_act_2007_consolidated_01-g0-00.pdf",
     ),
 }
@@ -283,14 +285,41 @@ def test_derived_provision_digest_matches_the_source_packet_digest(
     assert text.strip()
 
 
+def _collapse(value: str) -> str:
+    """Return the text with every run of whitespace reduced to one space."""
+
+    return " ".join(value.split())
+
+
+def _document_text(pdf_path: Path) -> str:
+    """Return the whole source document exactly as the derivation pipeline sees it.
+
+    The derivation pipeline removes repeated page furniture first
+    (``_document_lines``) and operates on that view; the same view is used here
+    so a derived provision unit must trace back to contiguous source lines.
+    """
+
+    return NEWLINE.join(_document_lines(pdf_path))
+
+
 @pytest.mark.parametrize(
     ("act_dir", "act_title", "identifier", "pinpoint"),
     _PINNED_DIGESTS,
     ids=[f"{row[0]}-{row[2]}".replace(" ", "-") for row in _PINNED_DIGESTS],
 )
-def test_provision_text_is_a_non_empty_substring_of_the_source_document(
+def test_derived_provision_text_units_are_substrings_of_the_source_document(
     act_dir: str, act_title: str, identifier: str, pinpoint: str
 ) -> None:
     text_path = RECORDED_FIXTURE_ROOT / act_dir / "provisions" / f"{_slug(identifier)}.txt"
 
-    assert text_path.read_bytes().strip()
+    provision = text_path.read_text(encoding="utf-8")
+    assert provision.strip()
+
+    pdf_path = next((RECORDED_FIXTURE_ROOT / act_dir).glob("*.pdf"))
+    document = _collapse(_document_text(pdf_path.resolve()))
+    assert document
+
+    for unit in provision.splitlines():
+        collapsed = _collapse(unit)
+        if collapsed:
+            assert collapsed in document
