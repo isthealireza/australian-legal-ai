@@ -74,7 +74,7 @@ def assert_task_transition_allowed(
             current=current, target=target, reason="dependencies are not satisfied"
         )
 
-    if current is TaskState.FAILED and target is TaskState.READY and attempt >= max_attempts:
+    if current is TaskState.FAILED and target is TaskState.READY and attempt > max_attempts:
         raise InvalidTaskTransitionError(
             current=current,
             target=target,

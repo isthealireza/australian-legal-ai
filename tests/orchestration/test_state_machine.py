@@ -70,8 +70,37 @@ def test_ready_requires_satisfied_dependencies() -> None:
 def test_retry_allowance_is_bounded() -> None:
     _assert(TaskState.FAILED, TaskState.READY, attempt=2, max_attempts=3)
     with pytest.raises(InvalidTaskTransitionError) as excinfo:
-        _assert(TaskState.FAILED, TaskState.READY, attempt=3, max_attempts=3)
-    assert "retry allowance exhausted" in str(excinfo.value)
+        _assert(TaskState.FAILED, TaskState.READY, attempt=4, max_attempts=3)
+    assert "exceeds max_attempts" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("max_attempts", "allowed_attempts", "rejected_attempts"),
+    [
+        (1, [1], [2]),
+        (2, [1, 2], [3]),
+        (3, [1, 2, 3], [4]),
+    ],
+    ids=["max=1", "max=2", "max=3"],
+)
+def test_exact_retry_attempt_counts(
+    max_attempts: int, allowed_attempts: list[int], rejected_attempts: list[int]
+) -> None:
+    """Regression: every configured attempt may run, including the last.
+
+    `max_attempts` is the total number of attempts permitted, so the final
+    attempt (`attempt == max_attempts`) must be allowed. A retry beyond the
+    ceiling (`attempt > max_attempts`) must be rejected. Previously the guard
+    used `attempt >= max_attempts`, which blocked the final configured attempt
+    and gave `max_attempts - 1` retries.
+    """
+
+    for attempt in allowed_attempts:
+        _assert(TaskState.FAILED, TaskState.READY, attempt=attempt, max_attempts=max_attempts)
+    for attempt in rejected_attempts:
+        with pytest.raises(InvalidTaskTransitionError) as excinfo:
+            _assert(TaskState.FAILED, TaskState.READY, attempt=attempt, max_attempts=max_attempts)
+        assert "exceeds max_attempts" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(("attempt", "max_attempts"), [(0, 3), (1, 0)])
