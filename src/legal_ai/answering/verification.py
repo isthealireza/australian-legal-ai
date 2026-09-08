@@ -15,6 +15,9 @@ refuses it too — an unavailable check never degrades into a pass.
 from __future__ import annotations
 
 import json
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 import httpx
@@ -22,11 +25,21 @@ import httpx
 from .errors import AnsweringError
 from .providers.openrouter import (
     MAX_PROVISION_CHARS,
+    MAX_VERIFIER_CALL_SECONDS,
     TIMEOUT,
     OpenRouterConfig,
     ResponseTooLarge,
+    ResponseTooSlow,
     read_bounded,
 )
+
+_LOGGER = logging.getLogger("legal_ai.answering.verification")
+
+#: The verdict is one word, but a reasoning model spends tokens thinking
+#: before it emits anything visible. Sized at 8, the whole budget went to
+#: reasoning and the reply came back empty with finish_reason 'length', so
+#: level 3 could never pass. This must clear the thinking and the word.
+MAX_VERIFIER_TOKENS = 1_024
 
 VERIFIER_SYSTEM_PROMPT = """You check whether a statement is supported by a statutory provision.
 
@@ -68,7 +81,7 @@ class AlwaysSupportedVerifier:
         return True
 
 
-class OpenRouterEntailmentVerifier:
+class ChatCompletionsEntailmentVerifier:
     """A second, independent model call that grades one statement."""
 
     def __init__(
@@ -89,7 +102,7 @@ class OpenRouterEntailmentVerifier:
         body = {
             "model": self._config.model,
             "temperature": 0,
-            "max_tokens": 8,
+            "max_tokens": MAX_VERIFIER_TOKENS,
             "messages": [
                 {"role": "system", "content": VERIFIER_SYSTEM_PROMPT},
                 {
@@ -118,16 +131,25 @@ class OpenRouterEntailmentVerifier:
                 ) as response:
                     if response.status_code != 200:
                         raise VerifierUnavailable(f"verifier returned HTTP {response.status_code}")
-                    raw = read_bounded(response)
+                    raw = read_bounded(response, deadline_seconds=MAX_VERIFIER_CALL_SECONDS)
+        except ResponseTooSlow as exc:
+            raise VerifierUnavailable("verifier response exceeded the permitted duration") from exc
         except ResponseTooLarge as exc:
             raise VerifierUnavailable("verifier response exceeds the permitted size") from exc
         except httpx.HTTPError as exc:
             raise VerifierUnavailable("verifier request failed") from exc
 
         try:
-            content = json.loads(raw)["choices"][0]["message"]["content"]
+            choice = json.loads(raw)["choices"][0]
+            content = choice["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise VerifierUnavailable("verifier response was malformed") from exc
+
+        # A reasoning model can spend its whole allowance thinking and return
+        # nothing visible. Name that precisely rather than reporting it as a
+        # malformed reply, which sent the last diagnosis in the wrong direction.
+        if choice.get("finish_reason") == "length" and not content:
+            raise VerifierUnavailable("verifier was truncated before it produced a verdict")
         if not isinstance(content, str):
             raise VerifierUnavailable("verifier returned a non-text message")
 
@@ -140,3 +162,69 @@ class OpenRouterEntailmentVerifier:
         if verdict == "SUPPORTED":
             return True
         raise VerifierUnavailable("verifier returned no recognisable verdict")
+
+
+@dataclass(frozen=True, slots=True)
+class NamedVerifier:
+    """One verifier in the chain, with the provider name it speaks to."""
+
+    name: str
+    verifier: EntailmentVerifier
+
+
+class ChainedEntailmentVerifier:
+    """Verify through the first available provider, preferring an independent one.
+
+    Two rules hold here. A provider that cannot be reached is skipped, so an
+    outage degrades to a different checker rather than to no checker. And the
+    provider that produced the statement is excluded outright: a model must
+    never be the proof of its own output.
+
+    If exclusion empties the chain, this raises. Refusing is the correct
+    outcome; quietly self-verifying is not.
+    """
+
+    def __init__(self, members: Sequence[NamedVerifier]) -> None:
+        if not members:
+            raise ValueError("a verifier chain needs at least one provider")
+        self._members = tuple(members)
+
+    @property
+    def providers(self) -> tuple[str, ...]:
+        """The provider names in the order they will be tried."""
+
+        return tuple(member.name for member in self._members)
+
+    def verify(self, *, statement: str, provision_text: str) -> bool:
+        """Verify with no exclusion. Used when the answer provider is unknown."""
+
+        return self.verify_excluding(
+            statement=statement, provision_text=provision_text, exclude=None
+        )
+
+    def verify_excluding(self, *, statement: str, provision_text: str, exclude: str | None) -> bool:
+        """Verify using a provider other than `exclude`."""
+
+        eligible = [member for member in self._members if member.name != exclude]
+        if not eligible:
+            raise VerifierUnavailable(
+                "no independent verifier is available; the answering provider "
+                "cannot verify its own output"
+            )
+
+        last_error: Exception | None = None
+        for member in eligible:
+            try:
+                return member.verifier.verify(statement=statement, provision_text=provision_text)
+            except VerifierUnavailable as exc:
+                _LOGGER.warning("verifier %s unavailable: %s", member.name, exc)
+                last_error = exc
+                continue
+
+        raise VerifierUnavailable(
+            f"every verifier failed ({', '.join(m.name for m in eligible)})"
+        ) from last_error
+
+
+#: The original name, kept so existing callers and tests continue to work.
+OpenRouterEntailmentVerifier = ChatCompletionsEntailmentVerifier

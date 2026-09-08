@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from ..answering.models import GroundedAnswer
+from ..answering.provisions import CataloguedProvision
 from ..answering.types import AnswerRefusalCode
+from .settings import DISCLAIMER
 
 _STRICT = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -110,4 +113,59 @@ def render_answer(answer: GroundedAnswer, disclaimer: str) -> AnswerBody:
             )
             for proposition in answer.propositions
         ),
+    )
+
+
+class ProvisionBody(BaseModel):
+    """One indexed provision, offered for selection. Carries no text."""
+
+    model_config = _STRICT
+
+    provision_identifier: str
+    pinpoint: str
+    heading: str | None
+    source_version: str | None
+
+
+class ActBody(BaseModel):
+    """One indexed Act and the provisions available within it."""
+
+    model_config = _STRICT
+
+    act_title: str
+    jurisdiction: str
+    provisions: tuple[ProvisionBody, ...]
+
+
+class CorpusBody(BaseModel):
+    """Everything the service can currently answer from."""
+
+    model_config = _STRICT
+
+    acts: tuple[ActBody, ...]
+    provision_count: int
+    disclaimer: str
+
+
+def render_catalogue(catalogue: Sequence[CataloguedProvision]) -> CorpusBody:
+    """Group the indexed provisions by Act for display."""
+
+    grouped: dict[tuple[str, str], list[ProvisionBody]] = {}
+    for item in catalogue:
+        grouped.setdefault((item.act_title, item.jurisdiction), []).append(
+            ProvisionBody(
+                provision_identifier=item.provision_identifier,
+                pinpoint=item.pinpoint,
+                heading=item.heading,
+                source_version=item.source_version,
+            )
+        )
+    acts = tuple(
+        ActBody(act_title=title, jurisdiction=jurisdiction, provisions=tuple(provisions))
+        for (title, jurisdiction), provisions in sorted(grouped.items())
+    )
+    return CorpusBody(
+        acts=acts,
+        provision_count=len(catalogue),
+        disclaimer=DISCLAIMER,
     )

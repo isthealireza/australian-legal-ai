@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Iterator
 
 import httpx
@@ -10,12 +11,17 @@ import pytest
 
 from legal_ai.answering.errors import AnswerModelUnavailable
 from legal_ai.answering.models import MAX_PROPOSITIONS, GroundedAnswerRequest
+from legal_ai.answering.providers import openrouter
 from legal_ai.answering.providers.openrouter import (
+    MAX_CALL_SECONDS,
     MAX_COMPLETION_TOKENS,
     MAX_RESPONSE_BYTES,
+    MAX_VERIFIER_CALL_SECONDS,
     OpenRouterAnswerModel,
     OpenRouterConfig,
+    ResponseTooSlow,
     load_openrouter_config,
+    read_bounded,
 )
 from legal_ai.answering.provisions import FileDerivedProvisionStore
 from legal_ai.answering.validation import validate_draft
@@ -74,7 +80,7 @@ def test_valid_response_produces_a_draft_that_validates() -> None:
     draft = _model(body).answer(request)
 
     packet = build_recorded_packet()
-    validated = validate_draft(draft, packet, (request.provision_text or "").encode("utf-8"))
+    validated = validate_draft(draft, packet, (request.provision_text or ""))
     assert isinstance(validated, tuple)
     assert validated[0].citation.quote == quote
 
@@ -107,9 +113,7 @@ def test_fabricated_quote_is_refused_downstream() -> None:
         {"propositions": [{"statement": "Invented.", "quote": "a fine of 500 penalty units"}]}
     )
     draft = _model(body).answer(request)
-    result = validate_draft(
-        draft, build_recorded_packet(), (request.provision_text or "").encode("utf-8")
-    )
+    result = validate_draft(draft, build_recorded_packet(), (request.provision_text or ""))
     assert result.name == "QUOTE_NOT_IN_SOURCE"  # type: ignore[union-attr]
 
 
@@ -297,3 +301,69 @@ def test_unset_base_url_uses_the_default(monkeypatch: pytest.MonkeyPatch) -> Non
     config = load_openrouter_config()
     assert config is not None
     assert config.base_url == "https://openrouter.ai/api/v1"
+
+
+class _TricklingStream(httpx.SyncByteStream):
+    """A response body that never ends, delivered slowly.
+
+    This is the shape that hangs a per-read timeout: each individual read
+    returns promptly, so httpx's `read` budget is reset again and again and
+    the response as a whole never completes.
+    """
+
+    def __init__(self, delay_seconds: float = 0.01) -> None:
+        self.delay_seconds = delay_seconds
+        self.chunks_served = 0
+
+    def __iter__(self) -> Iterator[bytes]:
+        while True:
+            time.sleep(self.delay_seconds)
+            self.chunks_served += 1
+            yield b'{"padding":"' + b"x" * 256
+
+
+def test_a_trickling_provider_is_cut_off_at_the_deadline() -> None:
+    """A never-ending response must fail closed, not hang the request.
+
+    Without a wall-clock deadline this loop runs forever, which is what left a
+    valid request stuck in 'Researching…'.
+    """
+
+    stream = _TricklingStream()
+    response = httpx.Response(200, stream=stream)
+    started = time.monotonic()
+
+    with pytest.raises(ResponseTooSlow):
+        read_bounded(response, deadline_seconds=0.5)
+
+    elapsed = time.monotonic() - started
+    assert 0.4 <= elapsed < 5.0, f"deadline not honoured: returned after {elapsed:.2f}s"
+    assert stream.chunks_served > 1, "the stream should have been read, then cut off"
+
+
+def test_the_adapter_surfaces_a_slow_provider_as_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End to end through the adapter: a hang becomes a typed refusal."""
+
+    monkeypatch.setattr(openrouter, "MAX_CALL_SECONDS", 0.5)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=_TricklingStream())
+
+    model = OpenRouterAnswerModel(CONFIG, transport=httpx.MockTransport(handler))
+    started = time.monotonic()
+    with pytest.raises(AnswerModelUnavailable):
+        model.answer(_request())
+    elapsed = time.monotonic() - started
+    assert elapsed < 5.0, f"adapter did not fail closed promptly: {elapsed:.2f}s"
+
+
+def test_the_default_deadline_is_inside_the_interface_abort() -> None:
+    """The answer call plus the verifier must resolve before the UI gives up.
+
+    static/app.js aborts at 120 seconds. If the server could exceed that, a
+    user would only ever see the interface time out, never a typed refusal.
+    """
+
+    assert MAX_CALL_SECONDS + MAX_VERIFIER_CALL_SECONDS < 120.0

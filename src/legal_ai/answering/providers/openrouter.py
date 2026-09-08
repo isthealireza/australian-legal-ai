@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
@@ -40,11 +41,21 @@ DEFAULT_MODEL = "deepseek/deepseek-chat"
 #: still watching, rather than holding the request open indefinitely.
 TIMEOUT = httpx.Timeout(connect=10.0, read=60.0, write=30.0, pool=10.0)
 MAX_PROVISION_CHARS = 60_000
-#: A grounded answer over one provision is small. Bounding both the model's
-#: output and the bytes accepted back stops a compromised or malfunctioning
-#: provider from exhausting memory before validation ever runs.
-MAX_COMPLETION_TOKENS = 2_000
+#: Bounding both the model's output and the bytes accepted back stops a
+#: compromised or malfunctioning provider from exhausting memory before
+#: validation ever runs. The output ceiling has to clear a long provision:
+#: Road Traffic Act 1974 s 56 answers exceeded 2,000 tokens and were cut off
+#: mid-JSON, which surfaced as a parse failure rather than a truncation.
+MAX_COMPLETION_TOKENS = 6_000
 MAX_RESPONSE_BYTES = 1_048_576
+#: Wall-clock ceiling on one provider call, start of body to end of body.
+#: httpx bounds each read, not the whole response, so without this a
+#: trickling provider holds the request open indefinitely. The answer call
+#: and the verifier together must stay well inside the interface's own
+#: 120-second abort, so that the user sees a refusal rather than a spinner.
+MAX_CALL_SECONDS = 60.0
+#: The verifier returns a single word, so it gets a much tighter budget.
+MAX_VERIFIER_CALL_SECONDS = 30.0
 
 SYSTEM_PROMPT = """You are a legal research assistant for Western Australian legislation.
 
@@ -74,15 +85,24 @@ provision text supporting it, or null if you are not quoting."""
 
 
 @dataclass(frozen=True, slots=True)
-class OpenRouterConfig:
-    """Resolved provider configuration."""
+class ProviderConfig:
+    """Resolved configuration for one chat-completions provider.
+
+    `name` is for logging and for keeping entailment on a different provider
+    from the answer. It is never a credential and never reaches a response.
+    """
 
     api_key: str
     model: str
     base_url: str
+    name: str = "openrouter"
 
 
-def _validated_base_url(raw: str) -> str | None:
+#: The original name, kept so existing callers and tests continue to work.
+OpenRouterConfig = ProviderConfig
+
+
+def validated_base_url(raw: str) -> str | None:
     """Return an HTTPS base URL, or None if it is not one.
 
     The bearer token travels on every request, so a base URL that is cleartext
@@ -118,7 +138,7 @@ def load_openrouter_config() -> OpenRouterConfig | None:
     api_key = os.environ.get(ENV_API_KEY, "").strip()
     if not api_key:
         return None
-    base_url = _validated_base_url(os.environ.get(ENV_BASE_URL, "").strip())
+    base_url = validated_base_url(os.environ.get(ENV_BASE_URL, "").strip())
     if base_url is None:
         # A misconfigured endpoint is a refusal, not a fallback to the default:
         # the operator asked for something specific and it cannot be honoured.
@@ -134,22 +154,35 @@ class ResponseTooLarge(AnswerModelUnavailable):
     """The provider sent more bytes than are permitted."""
 
 
-def read_bounded(response: httpx.Response) -> bytes:
-    """Read a streaming response, aborting as soon as it grows too large.
+class ResponseTooSlow(AnswerModelUnavailable):
+    """The provider took longer than the permitted duration."""
+
+
+def read_bounded(response: httpx.Response, *, deadline_seconds: float = MAX_CALL_SECONDS) -> bytes:
+    """Read a streaming response, bounded by both size and elapsed time.
 
     The size must be enforced *while* reading. Checking after the client has
     already buffered the body proves nothing: a provider that omits or
     understates Content-Length would have exhausted memory before the check
     ran. Iterating and stopping early is the only bound that actually holds.
+
+    Time needs the same treatment, and for the same reason. httpx applies its
+    read timeout to each individual read, not to the response as a whole, so a
+    provider that trickles bytes resets that budget forever and the request
+    never completes. Only a wall-clock deadline across the whole read actually
+    bounds the call.
     """
 
     declared = response.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
         raise ResponseTooLarge("provider declared a response over the permitted size")
 
+    expires_at = time.monotonic() + deadline_seconds
     chunks: list[bytes] = []
     total = 0
     for chunk in response.iter_bytes():
+        if time.monotonic() > expires_at:
+            raise ResponseTooSlow("provider response exceeded the permitted duration")
         total += len(chunk)
         if total > MAX_RESPONSE_BYTES:
             raise ResponseTooLarge("provider response exceeds the permitted size")
@@ -180,29 +213,39 @@ def _parse_propositions(content: str) -> list[dict[str, Any]]:
     return [item for item in raw if isinstance(item, dict)]
 
 
-class OpenRouterAnswerModel:
-    """A live adapter whose output is still fully validated downstream."""
+class ChatCompletionsAnswerModel:
+    """A live adapter whose output is still fully validated downstream.
 
-    name = "openrouter"
+    Every supported provider speaks the same request shape, so the only
+    differences are the endpoint, the credential, and the model name.
+    """
 
     def __init__(
         self,
-        config: OpenRouterConfig,
+        config: ProviderConfig,
         *,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._config = config
         self._transport = transport
+        self.name = config.name
 
     def answer(self, request: GroundedAnswerRequest) -> ModelDraft:
         """Make one call and return an untrusted structured draft."""
+
+        return self.answer_within(request, deadline_seconds=MAX_CALL_SECONDS)
+
+    def answer_within(
+        self, request: GroundedAnswerRequest, *, deadline_seconds: float
+    ) -> ModelDraft:
+        """Answer within an explicit allowance, so a chain can budget attempts."""
 
         if request.provision_text is None:
             # Without verified provision text there is nothing safe to reason
             # over, so the live adapter declines rather than guessing.
             raise AnswerModelUnavailable("no verified provision text is available")
 
-        content = self._call(self._user_prompt(request))
+        content = self._call(self._user_prompt(request), deadline_seconds=deadline_seconds)
         propositions: list[DraftProposition] = []
         for item in _parse_propositions(content):
             statement = item.get("statement")
@@ -236,7 +279,7 @@ class OpenRouterAnswerModel:
             "--- END PROVISION TEXT ---"
         )
 
-    def _call(self, user_prompt: str) -> str:
+    def _call(self, user_prompt: str, *, deadline_seconds: float = MAX_CALL_SECONDS) -> str:
         """POST one completion request and return the message content."""
 
         body = {
@@ -266,15 +309,26 @@ class OpenRouterAnswerModel:
                         raise AnswerModelUnavailable(
                             f"provider returned HTTP {response.status_code}"
                         )
-                    raw = read_bounded(response)
+                    raw = read_bounded(response, deadline_seconds=deadline_seconds)
         except httpx.HTTPError as exc:
             raise AnswerModelUnavailable("provider request failed") from exc
 
         try:
             payload = json.loads(raw)
-            content = payload["choices"][0]["message"]["content"]
+            choice = payload["choices"][0]
+            content = choice["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise AnswerModelUnavailable("provider response was malformed") from exc
         if not isinstance(content, str):
             raise AnswerModelUnavailable("provider returned a non-text message")
+
+        # A response cut off at the token ceiling is truncated mid-JSON. Say so,
+        # rather than reporting the downstream parse failure as malformed output
+        # and leaving the real cause invisible.
+        if choice.get("finish_reason") == "length":
+            raise AnswerModelUnavailable("provider response was truncated at the token limit")
         return content
+
+
+#: The original name, kept so existing callers and tests continue to work.
+OpenRouterAnswerModel = ChatCompletionsAnswerModel

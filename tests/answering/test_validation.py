@@ -96,3 +96,60 @@ def test_validated_proposition_is_immutable() -> None:
     proposition: Proposition = validated[0]
     with pytest.raises(ValueError):
         proposition.statement = "rewritten"
+
+
+def test_quote_spanning_a_line_break_in_derived_text_validates() -> None:
+    """A quotation running from a lead-in into its lettered paragraphs.
+
+    Derived text puts each structural unit on its own line, so a genuine quote
+    across those units arrives joined by a space. This is the Road Traffic Act
+    1974 s 56 shape that previously refused with QUOTE_NOT_IN_SOURCE.
+    """
+
+    packet = build_packet()
+    source = (
+        "the driver must report the incident forthwith to \u2014\n"
+        "(a) the officer in charge of a police station; or\n"
+        "(b) the Commissioner of Police in a manner approved by the Commissioner."
+    )
+    quote = (
+        "the driver must report the incident forthwith to \u2014 "
+        "(a) the officer in charge of a police station; or "
+        "(b) the Commissioner of Police in a manner approved by the Commissioner."
+    )
+    validated = validate_draft(draft_for(packet, quote=quote), packet, source)
+    assert isinstance(validated, tuple)
+    assert validated[0].citation.quote == quote
+
+
+@pytest.mark.parametrize(
+    ("quote", "why"),
+    [
+        ("the driver must report the incident promptly to \u2014", "wording altered"),
+        ("the driver must report the incident forthwith to the officer", "text invented"),
+        ("(b) the Commissioner of Police; or (a) the officer in charge", "order reversed"),
+        ("the driver must report the incident forthwith to -", "typography changed"),
+        ("the driver's licence is cancelled forthwith", "wholly fabricated"),
+    ],
+)
+def test_whitespace_tolerance_does_not_admit_an_altered_quote(quote: str, why: str) -> None:
+    """Only whitespace is treated as layout. Everything else must match exactly."""
+
+    packet = build_packet()
+    source = (
+        "the driver must report the incident forthwith to \u2014\n"
+        "(a) the officer in charge of a police station; or\n"
+        "(b) the Commissioner of Police in a manner approved by the Commissioner."
+    )
+    result = validate_draft(draft_for(packet, quote=quote), packet, source)
+    assert result is AnswerRefusalCode.QUOTE_NOT_IN_SOURCE, why
+
+
+def test_quote_absent_from_the_provision_still_refuses() -> None:
+    packet = build_packet()
+    result = validate_draft(
+        draft_for(packet, quote="a fine of 500 penalty units"),
+        packet,
+        "Penalty: a fine of 30 PU.",
+    )
+    assert result is AnswerRefusalCode.QUOTE_NOT_IN_SOURCE

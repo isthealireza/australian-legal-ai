@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from legal_ai.answering.providers.registry import PROVIDERS
 from legal_ai.answering.verification import AlwaysSupportedVerifier
 from legal_ai.api.main import create_app
 from legal_ai.api.settings import DISCLAIMER, AnswerModelChoice, ApiSettings
@@ -20,6 +21,15 @@ ANSWERABLE = {
     "provision_identifier": "s 55",
     "pinpoint": "section 55",
 }
+
+
+def _clear_provider_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove every provider credential, so no chain member can be built."""
+
+    for spec in PROVIDERS.values():
+        monkeypatch.delenv(spec.env_api_key, raising=False)
+    for name in ("LEGAL_AI_ANSWER_PROVIDER", "LEGAL_AI_FALLBACK_PROVIDER"):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
@@ -160,7 +170,9 @@ def test_requested_entailment_without_credentials_refuses_every_request(
     Reported by the DeepSeek review gate as ENTAILMENT_SILENT_SKIP (high).
     """
 
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    # Every provider credential must go: with a fallback chain, one missing key
+    # simply moves to the next provider, which is the point of the chain.
+    _clear_provider_credentials(monkeypatch)
     settings = ApiSettings(
         corpus_root=RECORDED_FIXTURE_ROOT,
         audit_log_path=tmp_path / "audit.jsonl",

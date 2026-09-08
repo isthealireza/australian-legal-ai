@@ -18,6 +18,7 @@ through verified bytes.
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -42,6 +43,8 @@ from .provisions import DerivedProvision, DerivedProvisionStore, NullDerivedProv
 from .types import AnswerRefusalCode
 from .validation import validate_draft
 from .verification import EntailmentVerifier, VerifierUnavailable
+
+_LOGGER = logging.getLogger("legal_ai.answering")
 
 #: Upper bound on concurrent verifier calls for one answer.
 MAX_VERIFIER_CONCURRENCY = 8
@@ -84,22 +87,26 @@ class GroundedAnswerService:
 
         packet = result.packet
         provision = self._provisions.resolve(packet)
-        draft = self._draft(request.question, packet, provision)
-        if isinstance(draft, AnswerRefusalCode):
-            return AnswerRefused(code=draft)
+        drafted = self._draft(request.question, packet, provision)
+        if isinstance(drafted, AnswerRefusalCode):
+            return AnswerRefused(code=drafted)
+        draft, answered_by = drafted
 
-        provision_bytes = provision.text.encode("utf-8") if provision is not None else None
-        validated = validate_draft(draft, packet, provision_bytes)
+        verified_text = provision.text if provision is not None else None
+        validated = validate_draft(draft, packet, verified_text)
         if isinstance(validated, AnswerRefusalCode):
             return AnswerRefused(code=validated)
 
-        entailment = self._verify(validated, provision)
+        entailment = self._verify(validated, provision, answered_by)
         if entailment is not None:
             return AnswerRefused(code=entailment)
         return GroundedAnswer(propositions=validated)
 
     def _verify(
-        self, propositions: tuple[Proposition, ...], provision: DerivedProvision | None
+        self,
+        propositions: tuple[Proposition, ...],
+        provision: DerivedProvision | None,
+        answered_by: str | None = None,
     ) -> AnswerRefusalCode | None:
         """Run level 3 when it is configured and possible. None means it passed.
 
@@ -119,7 +126,18 @@ class GroundedAnswerService:
             # indistinguishable from one that passed level 3.
             return AnswerRefusalCode.ENTAILMENT_UNAVAILABLE
 
+        # A verifier that can exclude a provider is told which one produced the
+        # statement, so a model is never asked to confirm its own output.
+        excluding = getattr(verifier, "verify_excluding", None)
+
         def grade(proposition: Proposition) -> bool:
+            if callable(excluding):
+                supported: bool = excluding(
+                    statement=proposition.statement,
+                    provision_text=provision.text,
+                    exclude=answered_by,
+                )
+                return supported
             return verifier.verify(
                 statement=proposition.statement,
                 provision_text=provision.text,
@@ -130,11 +148,13 @@ class GroundedAnswerService:
             futures = [pool.submit(grade, proposition) for proposition in propositions]
             try:
                 verdicts = [future.result() for future in futures]
-            except VerifierUnavailable:
+            except VerifierUnavailable as exc:
+                _LOGGER.warning("entailment verifier unavailable: %s", exc)
                 return AnswerRefusalCode.ENTAILMENT_UNAVAILABLE
             except Exception:
                 # Deliberately broad: a verifier that fails in any way has not
                 # verified anything, and must never read as a pass.
+                _LOGGER.warning("entailment verifier raised a fault", exc_info=True)
                 return AnswerRefusalCode.ENTAILMENT_UNAVAILABLE
 
         if not all(verdicts):
@@ -146,8 +166,12 @@ class GroundedAnswerService:
         question: str,
         packet: WaEvidencePacket,
         provision: DerivedProvision | None,
-    ) -> ModelDraft | AnswerRefusalCode:
-        """Make the single model call, converting every failure into a refusal."""
+    ) -> tuple[ModelDraft, str | None] | AnswerRefusalCode:
+        """Make the single model call, converting every failure into a refusal.
+
+        Returns the draft and the provider that produced it, so entailment can
+        be run somewhere else.
+        """
 
         try:
             model_request = self._build_request(question, packet, provision)
@@ -155,17 +179,30 @@ class GroundedAnswerService:
             # A request that cannot even be constructed is refused, never
             # raised out of the pipeline as an unhandled error.
             return AnswerRefusalCode.MODEL_OUTPUT_MALFORMED
+
+        answered_by: str | None = None
+        with_provider = getattr(self._model, "answer_with_provider", None)
         try:
-            draft = self._model.answer(model_request)
-        except AnswerModelUnavailable:
+            if callable(with_provider):
+                outcome = with_provider(model_request)
+                draft, answered_by = outcome.draft, outcome.provider
+            else:
+                draft = self._model.answer(model_request)
+                answered_by = getattr(self._model, "name", None)
+        except AnswerModelUnavailable as exc:
+            # The refusal code the caller sees is deliberately coarse. Record
+            # why here, or an intermittent provider fault is undiagnosable from
+            # the outside. Nothing extra reaches the response.
+            _LOGGER.warning("answer model unavailable: %s", exc)
             return AnswerRefusalCode.MODEL_UNAVAILABLE
         except Exception:
             # Deliberately broad: any adapter fault at all is fail-closed, and
             # never degrades into an uncited or model-memory answer.
+            _LOGGER.warning("answer model raised an unexpected fault", exc_info=True)
             return AnswerRefusalCode.MODEL_UNAVAILABLE
         if not isinstance(draft, ModelDraft):
             return AnswerRefusalCode.MODEL_OUTPUT_MALFORMED
-        return draft
+        return draft, answered_by
 
     @staticmethod
     def _build_request(

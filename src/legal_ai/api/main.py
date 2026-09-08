@@ -11,6 +11,7 @@ fully validated, fully cited answer or an explicit typed refusal.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -21,7 +22,15 @@ from fastapi.staticfiles import StaticFiles
 from ..answering.audit_sinks import JsonlResearchAuditSink, LoggingResearchAuditSink
 from ..answering.mock import MockAnswerModel
 from ..answering.protocol import LegalAnswerModel
-from ..answering.providers import OpenRouterAnswerModel, load_openrouter_config
+from ..answering.providers.chain import ChainedAnswerModel, NamedAnswerModel
+from ..answering.providers.openrouter import ChatCompletionsAnswerModel
+from ..answering.providers.registry import (
+    MOCK,
+    answer_chain_specs,
+    answer_provider_name,
+    build_config,
+    verify_chain_specs,
+)
 from ..answering.provisions import (
     DerivedProvisionStore,
     FileDerivedProvisionStore,
@@ -29,13 +38,20 @@ from ..answering.provisions import (
 )
 from ..answering.service import GroundedAnswerService
 from ..answering.types import AnswerRefusalCode
-from ..answering.verification import EntailmentVerifier, OpenRouterEntailmentVerifier
+from ..answering.verification import (
+    ChainedEntailmentVerifier,
+    ChatCompletionsEntailmentVerifier,
+    EntailmentVerifier,
+    NamedVerifier,
+)
 from ..research.audit import ResearchAuditSink
 from ..research.corpus import RecordedWaCorpus
 from ..research.errors import RecordedCorpusError, ResearchAuditSinkUnavailable
 from ..research.service import WaResearchService
-from .routes import health, research
+from .routes import corpus, health, research
 from .settings import AnswerModelChoice, ApiSettings, load_settings
+
+_LOGGER = logging.getLogger("legal_ai.api")
 
 ENV_STATIC_DIR = "LEGAL_AI_STATIC_DIR"
 
@@ -76,24 +92,51 @@ def _provision_store(settings: ApiSettings) -> DerivedProvisionStore:
 
 
 def _resolve_model(settings: ApiSettings) -> LegalAnswerModel:
-    """Select the answer model. Falls back to the mock rather than failing open."""
+    """Build the answer chain from the environment, or fall back to the mock.
 
-    if settings.answer_model is AnswerModelChoice.OPENROUTER:
-        config = load_openrouter_config()
-        if config is not None:
-            return OpenRouterAnswerModel(config)
-    return MockAnswerModel()
+    A provider whose credential is absent is skipped, not guessed at. If the
+    chain ends up empty the mock is used, which answers from packet identity
+    alone and cannot invent anything.
+    """
+
+    del settings
+    if answer_provider_name() == MOCK:
+        return MockAnswerModel()
+
+    members: list[NamedAnswerModel] = []
+    for provider, model in answer_chain_specs():
+        config = build_config(provider, model)
+        if config is None:
+            _LOGGER.warning("answer provider %s is not configured and will be skipped", provider)
+            continue
+        members.append(NamedAnswerModel(name=provider, model=ChatCompletionsAnswerModel(config)))
+
+    if not members:
+        _LOGGER.warning("no answer provider is configured; using the mock adapter")
+        return MockAnswerModel()
+    _LOGGER.info("answer chain: %s", ", ".join(member.name for member in members))
+    return ChainedAnswerModel(members)
 
 
 def _resolve_verifier(settings: ApiSettings) -> EntailmentVerifier | None:
-    """Build the level-3 verifier only when it is explicitly requested."""
+    """Build the level-3 verifier chain only when it is explicitly requested."""
 
     if not settings.verify_entailment:
         return None
-    config = load_openrouter_config()
-    if config is None:
+
+    members: list[NamedVerifier] = []
+    for provider, model in verify_chain_specs():
+        config = build_config(provider, model)
+        if config is None:
+            continue
+        members.append(
+            NamedVerifier(name=provider, verifier=ChatCompletionsEntailmentVerifier(config))
+        )
+
+    if not members:
         return None
-    return OpenRouterEntailmentVerifier(config)
+    _LOGGER.info("verifier chain: %s", ", ".join(member.name for member in members))
+    return ChainedEntailmentVerifier(members)
 
 
 def _configuration_error(
@@ -109,7 +152,12 @@ def _configuration_error(
 
     if settings.verify_entailment and verifier is None:
         return AnswerRefusalCode.VERIFIER_NOT_CONFIGURED
-    if settings.answer_model is AnswerModelChoice.OPENROUTER and verifier is None:
+
+    # Keyed on the resolved provider, not on one provider's name. Any live
+    # generative provider is covered, so adding a fallback cannot become a way
+    # around the rule.
+    live = settings.answer_model is AnswerModelChoice.OPENROUTER or answer_provider_name() != MOCK
+    if live and verifier is None:
         # Levels 1 and 2 prove a citation points at the retrieved provision and
         # that any quote is really in it. Neither constrains the *statement*. A
         # mock adapter cannot invent one; a live generative model can, so it may
@@ -168,9 +216,17 @@ def create_app(
         AnswerRefusalCode.CORPUS_UNAVAILABLE if service is not None else wired
     )
     app.state.corpus_configured = service is not None
-    app.state.answer_model_name = getattr(answer_model, "name", type(answer_model).__name__)
+    providers = getattr(answer_model, "providers", None)
+    app.state.answer_model_name = (
+        "+".join(providers) if providers else getattr(answer_model, "name", "unknown")
+    )
     app.state.entailment_verified = entailment is not None
+    provisions = _provision_store(resolved)
+    app.state.catalogue = (
+        provisions.catalogue() if isinstance(provisions, FileDerivedProvisionStore) else ()
+    )
 
+    app.include_router(corpus.router)
     app.include_router(health.router)
     app.include_router(research.router)
 

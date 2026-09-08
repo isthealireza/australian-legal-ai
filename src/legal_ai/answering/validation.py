@@ -18,10 +18,29 @@ from .models import (
 from .types import AnswerRefusalCode
 
 
+def _collapse(value: str) -> str:
+    """Return the text with every run of whitespace reduced to one space.
+
+    Derived provision text places each structural unit on its own line. A
+    quotation that legitimately runs from a lead-in into its lettered
+    paragraphs — "…report the incident forthwith to — (a) … or (b) …" — joins
+    those units with a space, and would otherwise fail a byte-exact check
+    purely because of a line break this project introduced.
+
+    Line breaks are layout, exactly as the page wrapping in the source PDF was
+    layout. Collapsing them does not soften the check that matters: every
+    character of content must still be present, in the same order, with the
+    same wording, numbers, and typography. A fabricated, altered, or
+    reordered quote still fails.
+    """
+
+    return " ".join(value.split())
+
+
 def _validate_citation(
     citation: DraftCitation,
     packet: WaEvidencePacket,
-    provision_text: bytes | None,
+    provision_text: str | None,
 ) -> Citation | AnswerRefusalCode:
     """Check one asserted citation against the exact packet it claims."""
 
@@ -38,13 +57,15 @@ def _validate_citation(
     if citation.pinpoint != packet.pinpoint:
         return AnswerRefusalCode.CITATION_PINPOINT_MISMATCH
 
-    # A quote is optional, but a quote that is not literally present in the
-    # verified bytes is a fabrication and refuses the entire answer. When
-    # digest-chained provision text is available the quote is checked against
-    # that exact text; otherwise it is checked against the whole instrument.
+    # A quote is optional, but a quote that is not present in the verified text
+    # is a fabrication and refuses the entire answer. When digest-chained
+    # provision text is available the quote is checked against that exact text;
+    # otherwise it is checked against the whole instrument's bytes.
     if citation.quote is not None:
-        haystack = provision_text if provision_text is not None else packet.source_content
-        if citation.quote.encode("utf-8") not in haystack:
+        if provision_text is not None:
+            if _collapse(citation.quote) not in _collapse(provision_text):
+                return AnswerRefusalCode.QUOTE_NOT_IN_SOURCE
+        elif citation.quote.encode("utf-8") not in packet.source_content:
             return AnswerRefusalCode.QUOTE_NOT_IN_SOURCE
 
     return Citation(
@@ -63,7 +84,7 @@ def _validate_citation(
 def validate_draft(
     draft: ModelDraft,
     packet: WaEvidencePacket,
-    provision_text: bytes | None = None,
+    provision_text: str | None = None,
 ) -> tuple[Proposition, ...] | AnswerRefusalCode:
     """Return every validated proposition, or the first typed refusal code."""
 

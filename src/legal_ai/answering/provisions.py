@@ -42,6 +42,26 @@ class DerivedProvision:
     text: str
     sha256: str
     parent_sha256: str
+    act_title: str = ""
+    jurisdiction: str = ""
+    source_version: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CataloguedProvision:
+    """One indexed provision, described without disclosing its text.
+
+    This is what the interface offers a user to choose from. Listing only what
+    is actually indexed is what stops a user asking about an authority the
+    system does not hold, which would only ever produce a refusal.
+    """
+
+    act_title: str
+    jurisdiction: str
+    provision_identifier: str
+    pinpoint: str
+    heading: str | None
+    source_version: str | None
 
 
 class DerivedProvisionStore(Protocol):
@@ -137,6 +157,28 @@ class FileDerivedProvisionStore:
             text=text,
             sha256=recorded_digest,
             parent_sha256=parent_sha256,
+            act_title=_opt_str(parsed, "act_title") or "",
+            jurisdiction=_opt_str(parsed, "jurisdiction") or "",
+            source_version=_opt_str(parsed, "source_version"),
+        )
+
+    def catalogue(self) -> tuple[CataloguedProvision, ...]:
+        """Describe every indexed provision, without disclosing any text."""
+
+        described = [
+            CataloguedProvision(
+                act_title=record.act_title,
+                jurisdiction=record.jurisdiction,
+                provision_identifier=record.provision_identifier,
+                pinpoint=record.pinpoint,
+                heading=record.heading,
+                source_version=record.source_version,
+            )
+            for record in self._records.values()
+            if record.act_title and record.jurisdiction
+        ]
+        return tuple(
+            sorted(described, key=lambda item: (item.act_title, item.provision_identifier))
         )
 
     def resolve(self, packet: WaEvidencePacket) -> DerivedProvision | None:

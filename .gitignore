@@ -49,3 +49,6 @@ tmp/
 
 # Local DeepSeek review bundles and validated results
 .deepseek-review/
+
+# Local scratch (n8n tools, local audit logs) - not part of this repo
+.local/
