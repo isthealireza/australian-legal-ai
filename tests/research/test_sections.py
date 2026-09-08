@@ -5,6 +5,9 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import shutil
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -21,6 +24,37 @@ _SECTIONS_FILE = (
 _S55_HEADING = "Driver in incident occasioning property damage to stop and give information"
 _S56_HEADING = (
     "Driver in incident occasioning bodily harm or property damage to report incident to police"
+)
+
+
+def _symlinks_supported() -> bool:
+    """Return whether the process can create a filesystem symlink.
+
+    On Windows, creating a symlink requires a privilege the shell often does
+    not hold (WinError 1314). The symlink-containment assertions in the two
+    tests below cannot run where no symlink can be created at all. Rather
+    than report a red failure on such a host, those tests are skipped; their
+    assertions still run wherever symlinks work (Linux CI). The security
+    assertions themselves are unchanged.
+    """
+
+    if not sys.platform.startswith("win"):
+        return True
+    scratch = Path(tempfile.mkdtemp())
+    try:
+        target = scratch / "target"
+        target.write_text("x", encoding="utf-8")
+        (scratch / "link").symlink_to(target)
+        return True
+    except OSError:
+        return False
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+_SYMLINK_SKIP = pytest.mark.skipif(
+    not _symlinks_supported(),
+    reason="symlink creation is not permitted in this environment (WinError 1314)",
 )
 
 
@@ -261,6 +295,7 @@ def test_corpus_sections_skips_entry_missing_text_sha256(tmp_path: Path) -> None
     assert source.sections == ()
 
 
+@_SYMLINK_SKIP
 def test_corpus_sections_empty_when_sections_file_is_symlink_inside_root(tmp_path: Path) -> None:
     content = b"synthetic content"
     sha256 = hashlib.sha256(content).hexdigest()
@@ -311,6 +346,7 @@ def test_corpus_sections_empty_when_sections_file_is_symlink_inside_root(tmp_pat
     assert source.sections == ()
 
 
+@_SYMLINK_SKIP
 def test_corpus_sections_empty_when_sections_file_is_symlink_outside_root(tmp_path: Path) -> None:
     corpus_root = tmp_path / "corpus"
     corpus_root.mkdir()
