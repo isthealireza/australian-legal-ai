@@ -1,0 +1,29 @@
+{
+  "act_title": "Motor Vehicle Dealers Act 1973",
+  "byte_length": 1143,
+  "derivation": {
+    "steps": [
+      "pypdf text extraction, page by page, in document order",
+      "removal of repeated page headers, footers, and running Part/Division titles",
+      "per-line whitespace trimming and removal of blank lines",
+      "provision boundary detection between one section heading and the next",
+      "reflow of layout-wrapped lines into one line per structural unit"
+    ],
+    "tool": "scripts/ingest_wa_act.py"
+  },
+  "derived_at_utc": "2026-09-08T03:55:57Z",
+  "file": "s_30.txt",
+  "heading": "Unlicensed dealing etc., offences as to",
+  "jurisdiction": "WA",
+  "notes": [
+    "Derived text, not official bytes. The official source is the parent PDF.",
+    "Quotes are validated against this file's recorded digest."
+  ],
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a525.html&view=consolidated",
+  "parent_sha256": "d91d26a14da9be42c0c477c4ae15a8e9171d11ae68ea5fc77889042a2a1e9990",
+  "parent_source_id": "wa_legislation:motor_vehicle_dealers_act_1973:consolidated:06-k0-01",
+  "pinpoint": "section 30",
+  "provision_identifier": "s 30",
+  "sha256": "0eb79c27f007e97fdda929d9ef787c474956c8066a41cb2fdcf917e38134071b",
+  "source_version": "06-k0-01"
+}
