@@ -1,8 +1,8 @@
 # ADR 0020: Derived Provision Text, a Live Provider, and Entailment Verification
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-02
-- Accepted: not yet accepted — owner authorisation required before merge
+- Accepted: 2026-09-08 (owner: Ali Rad)
 - Builds on: [ADR 0013](0013-phase-4-research-evidence-packets.md), [ADR 0019](0019-phase-5-grounded-answering-and-read-only-api.md)
 
 ## Context

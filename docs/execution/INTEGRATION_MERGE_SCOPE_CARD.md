@@ -73,3 +73,18 @@ rename is also expressed by git's rename detection in the diff.)
 
 The merge branch can be dropped; `main` is untouched. Reverting the renumber
 commit restores ADR 0014/0015 filenames and references.
+
+## Confirmed pre-existing defect on main — ORCH-001 (not fixed in this task)
+
+The external review gate identified an off-by-one in main's orchestration
+retry guard. It is main's code, merged in as-is, and this task left it
+untouched per the owner's instruction (no feature work, no refactor). It is
+recorded here so it is not lost.
+
+- **File:** `src/legal_ai/orchestration/state_machine.py`
+- **Defect:** the retry guard rejects a `FAILED → READY` transition when
+  `attempt >= max_attempts`. With `max_attempts = N`, only attempts `1 .. N-1`
+  may retry, so the final configured attempt never runs. The guard must allow
+  the `N`th attempt.
+- **Needs:** its own bounded task and a regression test that fails before the
+  fix (asserting the exact `max_attempts` configured attempts are permitted).

@@ -1,8 +1,8 @@
 # ADR 0019: Phase 5 Grounded Answering and the Read-Only Research API
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-02
-- Accepted: not yet accepted — owner authorisation required before merge
+- Accepted: 2026-09-08 (owner: Ali Rad)
 
 ## Context
 
