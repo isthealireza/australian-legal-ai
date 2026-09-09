@@ -105,6 +105,15 @@ ADVERSARIAL_OUT_OF_SCOPE = [
     "Review the attached document against section 15.",
     "Look over my lease and tell me if clause 3 is okay.",
     "prepare a demand for payment under section 22",
+    # Common intent phrasings the review gate named as bypasses.
+    "Can I sign this contract?",
+    "Is my contract fair?",
+    "Advise me on my lease.",
+    "Can I accept this agreement?",
+    "Should I accept this agreement given section 14?",
+    "Is my supplier agreement enforceable?",
+    # Zero-width character inserted mid-word to defeat a literal match.
+    "re​view my contract against section 17",
 ]
 
 # Legitimate research questions that mention validity, enforceability, or
@@ -115,6 +124,8 @@ ABSTRACT_RESEARCH = [
     "What makes a contract of sale binding under the Sale of Goods Act?",
     "whether section 19 applies to conduct that is void",
     "Is section 30 a valid basis for an unlicensed dealing charge?",
+    "Is it fair that section 55 imposes a fine of 30 PU?",
+    "Does section 7 make a waiver in a contract void?",
 ]
 
 

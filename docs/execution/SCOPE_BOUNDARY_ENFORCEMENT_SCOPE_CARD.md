@@ -66,6 +66,41 @@ jurisdiction refusals: zero model calls, near-zero latency, audited.
 Before implementation these failed (the mock answered S1-S4; the classifier did
 not exist).
 
+## Residual limitation and review-gate findings
+
+A deterministic classifier over free-text English is a **mitigation, not a
+complete control**: it cannot be proven un-bypassable, because a novel paraphrase
+it has not seen is a false negative by construction. This is inherent to the
+deterministic, prompt-free approach this task specified, and it is why the gate's
+core objection ("regex is bypassable") is correct in principle. The design owns
+that limitation rather than hiding it:
+
+- It closes the **demonstrated** leak (the mock answering S1-S4) and the concrete
+  bypasses the gate named across two rounds — analyze/check/assess/vet/look over,
+  draw up/write me/prepare, can/should I sign/accept, advise me on my …, is my …
+  fair/enforceable — with zero false positives on legitimate research about
+  validity, enforceability, or contracts in the abstract.
+- Input is normalised before matching (NFKC fold, zero-width strip, whitespace
+  collapse), denying the cheapest obfuscations (homoglyphs, zero-width joiners).
+- A false negative is **not** a downstream bypass of grounding: a review/drafting
+  request that slips the classifier still faces retrieval, citation validation,
+  and per-proposition entailment, none of which this weakens. On the live chain
+  such a request produces no groundable proposition and refuses anyway (both
+  campaigns showed this); the classifier's job is to make that refusal a precise,
+  pre-model, audited `REQUEST_OUT_OF_SCOPE` and to close the mock-style leak.
+- **Query-field vector (gate SCOPE-002):** out-of-scope intent cannot be smuggled
+  through `act_title`/`provision_identifier` to obtain an answer. Those fields
+  must resolve to a recorded WA act/provision or the request is refused
+  (`RETRIEVAL_MISSING`); a non-legislation title never reaches the model. The gate
+  is classified over the question, which is the only field that can carry a
+  review/drafting instruction and still ground.
+
+An **un-bypassable** scope control (a learned intent classifier, or a structured
+question contract that forbids free text) is a different class of work than a
+deterministic pre-filter and is out of scope for this bounded task; it would be a
+separate ADR-gated decision. If the owner judges the residual false-negative risk
+unacceptable, that is the follow-up.
+
 ## Definition of done
 
 ruff, ruff format --check, mypy, pytest, then the DeepSeek review gate. Then

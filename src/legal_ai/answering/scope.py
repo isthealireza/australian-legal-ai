@@ -21,7 +21,25 @@ entailment); a match refuses before the model is ever called.
 from __future__ import annotations
 
 import re
+import unicodedata
 from enum import StrEnum
+
+#: Zero-width and word-joiner code points that carry no meaning but can be
+#: inserted mid-word to defeat a literal match ("re​view my contract").
+_ZERO_WIDTH = dict.fromkeys(map(ord, "​‌‍⁠﻿"), None)
+
+
+def _normalise(question: str) -> str:
+    """Fold obfuscation before matching: NFKC, strip zero-width, collapse space.
+
+    NFKC folds compatibility homoglyphs and full-width forms to their plain
+    equivalents; zero-width characters are removed; runs of whitespace collapse
+    to one space. This does not decide scope, it only denies the cheapest ways to
+    smuggle an out-of-scope phrasing past a literal pattern.
+    """
+
+    folded = unicodedata.normalize("NFKC", question).translate(_ZERO_WIDTH)
+    return " ".join(folded.split())
 
 
 class RequestKind(StrEnum):
@@ -78,15 +96,21 @@ _REVIEW_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"\b(?:i\s*am|i'?m)\s+pasting\b",
         rf"\bhere\s+is\s+{_SUPPLIED}\b",
         rf"\b{_INSTRUMENT}\s+(?:says|states|reads|stipulates|excludes|warrants|provides\s+that)\b",
-        r"\bshould\s+i\s+(?:sign|accept|agree\s+to)\b",
+        r"\b(?:should|can|may|could)\s+i\s+(?:sign|accept|agree\s+to)\b",
         r"\badvise\s+(?:my|the|our)\s+client\b",
+        rf"\badvise\s+me\s+(?:on|about)\s+(?:my|this|that|the|our)\s+(?:attached\s+)?{_INSTRUMENT}\b",
+        rf"\bact\s+on\s+(?:this|that|my|the|our)\s+(?:attached\s+)?{_INSTRUMENT}\b",
         # Validity/enforceability, but only anchored to the user's own instrument
         # ("is my contract enforceable"), never a bare research question about
         # whether something is valid.
-        rf"\b(?:is|are|whether)\b[^.?!]{{0,30}}\b(?:my|our|attached)\s+(?:\w+\s+){{0,3}}?"
-        rf"{_INSTRUMENT}\b[^.?!]{{0,30}}\b(?:enforceable|void|valid|binding|lawful)\b",
         rf"\b(?:my|our|attached)\s+(?:\w+\s+){{0,3}}?{_INSTRUMENT}\b[^.?!]{{0,30}}\b"
         r"(?:enforceable|void|valid|binding|lawful)\b",
+        rf"\b(?:enforceable|void|valid|binding|lawful)\b[^.?!]{{0,30}}\b(?:my|our|attached)\s+"
+        rf"(?:\w+\s+){{0,3}}?{_INSTRUMENT}\b",
+        # Subjective review terms (fair/reasonable/okay) are never legislative
+        # research language, so they may anchor to a deictic instrument too.
+        rf"\b(?:my|our|this|that|the|attached)\s+(?:\w+\s+){{0,3}}?{_INSTRUMENT}\b[^.?!]{{0,30}}\b"
+        r"(?:fair|reasonable|okay|acceptable|a\s+good\s+deal)\b",
     )
 )
 
@@ -104,10 +128,11 @@ def classify_request_kind(question: str) -> RequestKind:
     grounding checks.
     """
 
+    normalised = _normalise(question)
     for pattern in _DRAFTING_PATTERNS:
-        if pattern.search(question):
+        if pattern.search(normalised):
             return RequestKind.DOCUMENT_DRAFTING
     for pattern in _REVIEW_PATTERNS:
-        if pattern.search(question):
+        if pattern.search(normalised):
             return RequestKind.DOCUMENT_REVIEW
     return RequestKind.RESEARCH
