@@ -66,6 +66,63 @@ false negative in the trust gate.
 - Existing gate contract preserved: `test_hedged_or_decorated_verdict_refuses`
   (exact one-word verdict only) and all other `test_verification.py` cases pass.
 
+## Cost and latency of the budget change (measured 2026-09-09)
+
+The gate flagged the 1024 -> 8192 `MAX_VERIFIER_TOKENS` change as unmeasured.
+Measured against the live verify model (`deepseek-v4-flash`):
+
+- **The 8192 ceiling is almost never reached.** Actual verifier completion
+  tokens on 10 grounded statements averaged ~90-160 (max 687 under the old cap,
+  277 under the new) — well below even the old 1024. Raising the ceiling adds no
+  steady-state token spend; it only prevents intermittent truncation on
+  long-reasoning cases. Controlled A/B (same prompt, budget 1024 vs 8192) showed
+  no cost or latency increase (the new arm was marginally faster, within
+  reasoning-model run-to-run noise).
+- **Per-answer cost did not rise.** OpenRouter answer-side cost measured
+  $0.0038/answer over 10 grounded answers; the DeepSeek verifier adds ~690
+  prompt + ~100 completion tokens per proposition verified (sub-$0.001 at flash
+  rates). Total stays around the ~1 cent/answer round-2 baseline — it does not
+  double.
+- **Verifier latency per call ~1.5-2.6 s**, unchanged by the budget. End-to-end
+  per-answer latency is dominated by proposition count (one verifier call per
+  proposition), not the budget.
+
+### Residual finding (honest scope limit — not fixed here)
+
+Isolated verification of grounded statements is fixed (15/15 previously-failing
+statements now SUPPORTED). But **end-to-end, multi-proposition answers on
+exception-heavy provisions can still refuse.** The live answer model returns up
+to 4 propositions for s 7 and s 14; the pipeline refuses the whole answer if any
+one fails (`_run_level_three`: "one failure still refuses everything"). Two
+causes compound: (a) residual per-proposition verifier nondeterminism, and
+(b) genuinely imperfect propositions — e.g. an s 7 proposition rephrased
+"whether in an owner-driver contract **and** whether in writing or not" as
+"...**or not**", which the verifier correctly declined. This is a separate issue
+from the false negatives fixed here and is left for the backlog item below.
+
+## Backlog (record only — do NOT build in this task)
+
+**One future task: surface "true but partial" in the answer text rather than
+refusing or staying silent.** Two findings are the same class of problem:
+
+1. **Omitted statutory exceptions.** This fix makes a statement SUPPORTED when it
+   accurately restates part of a provision but omits an exception or proviso the
+   text also contains (e.g. s 14(3) merchantable quality without the "if the
+   buyer has examined the goods" proviso). Technically supported, legally
+   incomplete.
+2. **Unflagged temporal/version gap** (from `LIVE_ADVERSARIAL_RUN.md` T1 and
+   `LIVE_ADVERSARIAL_RUN_2.md` family A): a past-dated question is answered from
+   the current snapshot with no caveat in the answer text.
+
+Both are "true but partial": correct as far as they go, but the answer text does
+not tell the reader what was left out or that the currency may not match. The
+future work is to **surface omitted exceptions and version gaps in the answer
+text** (a caveat/annotation), rather than either refusing the answer or leaving
+the omission silent. Also worth considering: per-proposition partial answers so
+one imperfect proposition does not sink an otherwise grounded answer.
+
 ## Definition of done
 
 ruff, ruff format --check, mypy, pytest, then the DeepSeek review gate.
+Adds an offline guard test (`tests/answering/test_verification_intent.py`)
+pinning the prompt semantics with recorded verifier replies.
