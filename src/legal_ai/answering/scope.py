@@ -53,64 +53,82 @@ class RequestKind(StrEnum):
     DOCUMENT_DRAFTING = "DOCUMENT_DRAFTING"
 
 
+#: Private-instrument nouns. Deliberately excludes legislation terms (act,
+#: section, provision, regulation, schedule of an Act): "review this Act" or
+#: "review this section" is research, never document review.
 _INSTRUMENT = (
-    r"(?:contract|clause|agreement|document|paperwork|term|deed|lease|"
-    r"policy|schedule|invoice|letter|notice|memo|affidavit|submission)"
+    r"(?:contract|clause|agreement|paperwork|deed|lease|policy|"
+    r"invoice|letter|notice|memo|affidavit|submission)"
 )
-#: A supplied instrument: the user's own, or one they attached/pasted. This
-#: anchor is what keeps a mere mention of a contract from being read as a review
-#: request — a signal only counts when it points at *their* document.
-_SUPPLIED = rf"(?:my|our|this|that|the|your)\s+(?:attached\s+|above\s+)?{_INSTRUMENT}"
+#: A *supplied* instrument: the user's own, or one they attached/pasted. A signal
+#: only counts when it points at their document, so a mere mention of a contract
+#: in a legislation question is unaffected. "document"/"agreement"/"term" only
+#: count with such an anchor, never bare.
+_SUPPLIED = (
+    rf"(?:my|our|this|that|the|your)\s+(?:\w+\s+){{0,2}}?(?:{_INSTRUMENT}|document|agreement|term)"
+)
 
-#: Verbs that ask the system to produce a document.
-_DRAFT_VERB = r"(?:draft|write|prepare|draw\s+up|put\s+together|compose|knock\s+up)"
-#: Verbs that ask the system to assess a supplied document.
-_REVIEW_VERB = (
-    r"(?:review|analyse|analyze|assess|check|vet|examine|"
-    r"look\s+over|go\s+over|look\s+at|read\s+over)"
+#: Verbs asking the system to produce a document.
+_DRAFT_VERB = r"(?:draft|write|prepare|draw\s+up|put\s+together|compose|knock\s+up|generate)"
+#: An imperative/request lead-in, so a drafting verb only fires when the system
+#: is actually being asked to draft — not in "what are the requirements to
+#: prepare a notice", where the verb is part of a research question.
+_DRAFT_LEAD = (
+    r"(?:^|[.?!]\s+|\b(?:please|pls|kindly|can\s+you|could\s+you|would\s+you|"
+    r"will\s+you|help\s+me|i\s+need\s+you\s+to|i\s+want\s+you\s+to)\s+)"
 )
 _DOC_NOUN = (
     r"(?:letter|notice|agreement|contract|clause|demand|deed|memo|"
-    r"submission|affidavit|filing|response|schedule)"
+    r"submission|affidavit|filing|response)"
+)
+#: Verbs asking the system to assess a supplied document.
+_REVIEW_VERB = (
+    r"(?:review|analyse|analyze|assess|check|vet|examine|"
+    r"look\s+over|go\s+over|take\s+a\s+look\s+at|have\s+a\s+look\s+at|read\s+over)"
 )
 
-#: Asking the system to produce a document. Order matters: drafting is checked
-#: first because "draft a letter ... citing section 22" also names a provision.
+#: Asking the system to produce a document. Drafting is checked first because a
+#: drafting request ("draft a letter ... citing section 22") also names a
+#: provision. The verb must be in an imperative/request position.
 _DRAFTING_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
-        rf"\b{_DRAFT_VERB}\s+(?:me\s+)?(?:a|an|the|my|this)\b[^.?!]*\b{_DOC_NOUN}\b",
-        r"\bletter\s+of\s+demand\b",
+        rf"{_DRAFT_LEAD}{_DRAFT_VERB}\s+(?:me\s+)?(?:a|an|the|my|this)\b[^.?!]*\b{_DOC_NOUN}\b",
         r"\bmake\s+it\s+ready\s+to\s+send\b",
-        r"\bready\s+to\s+send\b",
     )
 )
 
-#: Asking the system to review or advise on a supplied instrument.
+#: Asking the system to review or advise on a supplied instrument. Every pattern
+#: is anchored to the user's own document or an explicit advice-on-instrument
+#: request; none fires on a legislation-research phrasing.
 _REVIEW_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
         rf"\b{_REVIEW_VERB}\s+{_SUPPLIED}\b",
-        rf"\b{_REVIEW_VERB}\s+(?:this|that|the|it)\b[^.?!]{{0,40}}\b(?:for\s+me|for\s+compliance|"
-        r"against\s+section|and\s+(?:tell|advise|let)\s+me)\b",
         r"\b(?:i\s*am|i'?m)\s+pasting\b",
         rf"\bhere\s+is\s+{_SUPPLIED}\b",
-        rf"\b{_INSTRUMENT}\s+(?:says|states|reads|stipulates|excludes|warrants|provides\s+that)\b",
+        # A quoted instrument, but only the user's own ("my … contract says"),
+        # never "the contract says" in an abstract legislation question.
+        rf"\b(?:my|our|your)\b[^.?!]{{0,30}}\b{_INSTRUMENT}\s+"
+        r"(?:says|states|reads|stipulates|excludes|warrants|provides\s+that)\b",
         r"\b(?:should|can|may|could)\s+i\s+(?:sign|accept|agree\s+to)\b",
         r"\badvise\s+(?:my|the|our)\s+client\b",
-        rf"\badvise\s+me\s+(?:on|about)\s+(?:my|this|that|the|our)\s+(?:attached\s+)?{_INSTRUMENT}\b",
-        rf"\bact\s+on\s+(?:this|that|my|the|our)\s+(?:attached\s+)?{_INSTRUMENT}\b",
-        # Validity/enforceability, but only anchored to the user's own instrument
+        rf"\badvise\s+me\s+(?:on|about)\s+(?:my|this|that|the|our)\s+(?:attached\s+)?"
+        rf"(?:{_INSTRUMENT}|document|agreement|term)\b",
+        rf"\bwhat\s+(?:do\s+you\s+think|are\s+your\s+thoughts|is\s+your\s+(?:view|opinion))\s+"
+        rf"(?:of|about|on)\s+(?:my|our|this|that|the)\s+(?:attached\s+)?"
+        rf"(?:{_INSTRUMENT}|document|agreement|term)\b",
+        # Validity/enforceability, anchored to the user's own instrument only
         # ("is my contract enforceable"), never a bare research question about
-        # whether something is valid.
-        rf"\b(?:my|our|attached)\s+(?:\w+\s+){{0,3}}?{_INSTRUMENT}\b[^.?!]{{0,30}}\b"
-        r"(?:enforceable|void|valid|binding|lawful)\b",
+        # whether some provision or claim is valid.
+        rf"\b(?:my|our|attached)\s+(?:\w+\s+){{0,3}}?(?:{_INSTRUMENT}|agreement)\b"
+        rf"[^.?!]{{0,30}}\b(?:enforceable|void|valid|binding|lawful)\b",
         rf"\b(?:enforceable|void|valid|binding|lawful)\b[^.?!]{{0,30}}\b(?:my|our|attached)\s+"
-        rf"(?:\w+\s+){{0,3}}?{_INSTRUMENT}\b",
+        rf"(?:\w+\s+){{0,3}}?(?:{_INSTRUMENT}|agreement)\b",
         # Subjective review terms (fair/reasonable/okay) are never legislative
         # research language, so they may anchor to a deictic instrument too.
-        rf"\b(?:my|our|this|that|the|attached)\s+(?:\w+\s+){{0,3}}?{_INSTRUMENT}\b[^.?!]{{0,30}}\b"
-        r"(?:fair|reasonable|okay|acceptable|a\s+good\s+deal)\b",
+        rf"\b(?:my|our|this|that|the|attached)\s+(?:\w+\s+){{0,3}}?(?:{_INSTRUMENT}|agreement)\b"
+        rf"[^.?!]{{0,30}}\b(?:fair|reasonable|okay|acceptable|a\s+good\s+deal)\b",
     )
 )
 

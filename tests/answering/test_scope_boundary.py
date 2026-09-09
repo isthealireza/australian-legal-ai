@@ -112,8 +112,24 @@ ADVERSARIAL_OUT_OF_SCOPE = [
     "Can I accept this agreement?",
     "Should I accept this agreement given section 14?",
     "Is my supplier agreement enforceable?",
+    "take a look at my contract and tell me if it's okay",
+    "generate a letter of demand for section 22",
+    "what do you think of my contract",
+    "Please draft a notice of dispute under section 25.",
     # Zero-width character inserted mid-word to defeat a literal match.
     "re​view my contract against section 17",
+]
+
+# In-scope legislation-research phrasings that name legislation deictically or
+# mention a document noun in a research context. These must NOT be refused
+# (the review gate caught earlier patterns wrongly refusing them).
+DEICTIC_RESEARCH = [
+    "Review this Act and tell me what section 55 requires.",
+    "Review this section and tell me what it says.",
+    "What is a letter of demand under section 22?",
+    "What are the requirements to prepare a notice of dispute under section 25?",
+    "What happens if the contract says the opposite of the Act?",
+    "How do I draft a notice of dispute under section 25?",
 ]
 
 # Legitimate research questions that mention validity, enforceability, or
@@ -226,6 +242,13 @@ def test_classifier_is_not_bypassed_by_obvious_paraphrases(question: str) -> Non
 def test_abstract_validity_questions_are_not_false_refused(question: str) -> None:
     # Mentioning validity, voidness, or contracts in the abstract is research,
     # not a request to review the user's own instrument.
+    assert classify_request_kind(question) is RequestKind.RESEARCH
+
+
+@pytest.mark.parametrize("question", DEICTIC_RESEARCH)
+def test_deictic_legislation_and_definitional_questions_are_in_scope(question: str) -> None:
+    # "Review this Act/section", "what is a letter of demand", "requirements to
+    # prepare a notice" are research, not document review or drafting requests.
     assert classify_request_kind(question) is RequestKind.RESEARCH
 
 
