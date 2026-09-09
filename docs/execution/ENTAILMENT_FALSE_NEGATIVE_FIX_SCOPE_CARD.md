@@ -121,6 +121,42 @@ text** (a caveat/annotation), rather than either refusing the answer or leaving
 the omission silent. Also worth considering: per-proposition partial answers so
 one imperfect proposition does not sink an otherwise grounded answer.
 
+## Owner decision — defer `partial-omission-legal-completeness`
+
+- Status: Accepted (deferred, not dismissed)
+- Date: 2026-09-09
+- Owner: Ali Rad
+
+### Finding
+
+The DeepSeek review gate raised a medium-severity critical finding,
+`partial-omission-legal-completeness`, against the reworded
+`VERIFIER_SYSTEM_PROMPT`: the prompt now marks a faithful but partial summary as
+SUPPORTED even when it omits an exception, proviso, or qualification present in
+the provision, so level 3 can pass an answer that is technically supported but
+legally incomplete, without a caveat. The gate exited non-zero. The finding is
+correct and stands.
+
+### Decision
+
+The owner accepts the finding and defers it. The prompt change is retained as
+specified for this task: correcting the false negatives required treating an
+accurate partial summary as supported, and the alternative (refusing any
+statement that omits an exception) is the false-negative behaviour this task was
+commissioned to remove. This is a deliberate, recorded owner decision made by a
+person — not a gate bypass, an override of the review, or an unreviewed change.
+The gate's judgement is accepted as right; only its timing is deferred.
+
+### What closes it
+
+The deferral is closed by the follow-up task on branch
+`feat/per-proposition-answers`: verifying and reporting each proposition on its
+own, so a proposition that omits a statutory exception can be surfaced as a
+withheld/partial part of the answer with its reason, rather than either silently
+passing or sinking the whole answer. The related temporal/version-gap surfacing
+remains in the backlog item above. Until that work lands, the finding remains
+open and recorded here, not resolved.
+
 ## Definition of done
 
 ruff, ruff format --check, mypy, pytest, then the DeepSeek review gate.
