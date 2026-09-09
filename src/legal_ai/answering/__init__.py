@@ -23,6 +23,7 @@ from .provisions import (
     FileDerivedProvisionStore,
     NullDerivedProvisionStore,
 )
+from .scope import RequestKind, classify_request_kind
 from .service import AnswerQuestion, GroundedAnswerService
 from .types import AnswerOutcome, AnswerRefusalCode
 from .validation import validate_draft
@@ -59,9 +60,11 @@ __all__ = [
     "OpenRouterConfig",
     "OpenRouterEntailmentVerifier",
     "Proposition",
+    "RequestKind",
     "VerifierUnavailable",
     "WithheldProposition",
     "WithheldReason",
+    "classify_request_kind",
     "load_openrouter_config",
     "validate_draft",
 ]

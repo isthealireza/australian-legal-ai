@@ -30,6 +30,7 @@ from ..research.service import (
     ResearchValidated,
     WaResearchService,
 )
+from ..research.types import ResearchRefusalCode as ResearchRefusalCodeType
 from .errors import AnswerModelUnavailable
 from .models import (
     AnswerRefused,
@@ -43,6 +44,7 @@ from .models import (
 )
 from .protocol import LegalAnswerModel
 from .provisions import DerivedProvision, DerivedProvisionStore, NullDerivedProvisionStore
+from .scope import RequestKind, classify_request_kind
 from .types import AnswerRefusalCode
 from .validation import validate_draft
 from .verification import EntailmentVerifier, VerifierUnavailable
@@ -87,6 +89,18 @@ class GroundedAnswerService:
 
     def answer(self, request: AnswerQuestion) -> AnswerResult:
         """Return a fully cited answer, or refuse totally with a typed code."""
+
+        # Scope gate first: the request kind is decided from the question text
+        # before any retrieval or model call, so a contract/document review or a
+        # drafting request is refused at near-zero cost and never reaches the
+        # model. The refusal is audited exactly like an out-of-corpus one.
+        if classify_request_kind(request.question) is not RequestKind.RESEARCH:
+            recorded = self._research.audit_refusal(
+                request.query, ResearchRefusalCodeType.REQUEST_OUT_OF_SCOPE
+            )
+            if not recorded:
+                return AnswerRefused(code=AnswerRefusalCode.RESEARCH_TERMINATED)
+            return AnswerRefused(code=AnswerRefusalCode.REQUEST_OUT_OF_SCOPE)
 
         result = self._research.research(request.query)
         if isinstance(result, ResearchTerminated):
