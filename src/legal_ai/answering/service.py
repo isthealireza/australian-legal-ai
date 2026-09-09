@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from enum import Enum, auto
 
 from ..research.models import ResearchQuery, WaEvidencePacket
 from ..research.service import (
@@ -37,6 +38,8 @@ from .models import (
     GroundedAnswerRequest,
     ModelDraft,
     Proposition,
+    WithheldProposition,
+    WithheldReason,
 )
 from .protocol import LegalAnswerModel
 from .provisions import DerivedProvision, DerivedProvisionStore, NullDerivedProvisionStore
@@ -48,6 +51,14 @@ _LOGGER = logging.getLogger("legal_ai.answering")
 
 #: Upper bound on concurrent verifier calls for one answer.
 MAX_VERIFIER_CONCURRENCY = 8
+
+
+class _Verdict(Enum):
+    """The level-3 outcome for one proposition. Internal to the pipeline."""
+
+    SUPPORTED = auto()
+    UNSUPPORTED = auto()
+    UNVERIFIED = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,69 +108,110 @@ class GroundedAnswerService:
         if isinstance(validated, AnswerRefusalCode):
             return AnswerRefused(code=validated)
 
-        entailment = self._verify(validated, provision, answered_by)
-        if entailment is not None:
-            return AnswerRefused(code=entailment)
-        return GroundedAnswer(propositions=validated)
+        return self._decide(validated, provision, answered_by)
 
-    def _verify(
+    def _decide(
         self,
         propositions: tuple[Proposition, ...],
         provision: DerivedProvision | None,
-        answered_by: str | None = None,
-    ) -> AnswerRefusalCode | None:
-        """Run level 3 when it is configured and possible. None means it passed.
+        answered_by: str | None,
+    ) -> AnswerResult:
+        """Grade level 3 per proposition and assemble a partial or total result.
 
-        Each proposition is graded independently, so the calls are issued
-        concurrently. Run in sequence they dominate response time: a six-part
-        answer costs six round trips, which is minutes rather than seconds.
-        Concurrency changes only the wall-clock cost, never the verdict — every
-        proposition is still graded, and one failure still refuses everything.
+        The unit of the entailment decision is one proposition. Each is graded on
+        its own; a supported one is kept, an unsupported or unverifiable one is
+        dropped and named. If at least one survives, the answer is returned with
+        the withheld ones recorded. If none survive, the whole answer is refused,
+        exactly as before. The per-proposition check is no weaker than the old
+        whole-answer one — only the unit of the decision changed.
+        """
+
+        verdicts = self._grade_each(propositions, provision, answered_by)
+
+        kept: list[Proposition] = []
+        withheld: list[WithheldProposition] = []
+        for proposition, verdict in zip(propositions, verdicts, strict=True):
+            if verdict is _Verdict.SUPPORTED:
+                kept.append(proposition)
+                continue
+            reason = (
+                WithheldReason.UNSUPPORTED
+                if verdict is _Verdict.UNSUPPORTED
+                else WithheldReason.UNVERIFIED
+            )
+            withheld.append(
+                WithheldProposition(
+                    statement=proposition.statement,
+                    pinpoint=proposition.citation.pinpoint,
+                    reason=reason,
+                )
+            )
+
+        if not kept:
+            # Nothing survived, so there is no partial answer to give. Refuse
+            # totally, and prefer the unavailable code if any proposition could
+            # not be verified — an outage must never read as a clean refusal.
+            if any(verdict is _Verdict.UNVERIFIED for verdict in verdicts):
+                return AnswerRefused(code=AnswerRefusalCode.ENTAILMENT_UNAVAILABLE)
+            return AnswerRefused(code=AnswerRefusalCode.ENTAILMENT_UNSUPPORTED)
+
+        return GroundedAnswer(propositions=tuple(kept), withheld=tuple(withheld))
+
+    def _grade_each(
+        self,
+        propositions: tuple[Proposition, ...],
+        provision: DerivedProvision | None,
+        answered_by: str | None,
+    ) -> tuple[_Verdict, ...]:
+        """Return one verdict per proposition, in order.
+
+        Grading is concurrent because run in sequence it dominates response
+        time: a six-part answer would cost six round trips. Concurrency changes
+        only the wall-clock cost, never a verdict. A verifier fault is confined
+        to the one proposition it graded — it becomes that proposition's
+        UNVERIFIED verdict, never a silent pass and never a verdict for another.
         """
 
         verifier = self._verifier
         if verifier is None:
-            return None
+            # Level 3 is opt-in. Without a verifier every proposition stands on
+            # levels 1 and 2 alone, exactly as before.
+            return tuple(_Verdict.SUPPORTED for _ in propositions)
         if provision is None:
-            # A configured verifier with nothing to verify against has not
-            # verified anything. Skipping here would return an answer that is
-            # indistinguishable from one that passed level 3.
-            return AnswerRefusalCode.ENTAILMENT_UNAVAILABLE
+            # A configured verifier with nothing to verify against has verified
+            # nothing: every proposition is unverifiable, so none can be kept.
+            return tuple(_Verdict.UNVERIFIED for _ in propositions)
 
         # A verifier that can exclude a provider is told which one produced the
         # statement, so a model is never asked to confirm its own output.
         excluding = getattr(verifier, "verify_excluding", None)
 
-        def grade(proposition: Proposition) -> bool:
-            if callable(excluding):
-                supported: bool = excluding(
-                    statement=proposition.statement,
-                    provision_text=provision.text,
-                    exclude=answered_by,
-                )
-                return supported
-            return verifier.verify(
-                statement=proposition.statement,
-                provision_text=provision.text,
-            )
+        def grade(proposition: Proposition) -> _Verdict:
+            try:
+                if callable(excluding):
+                    supported: bool = excluding(
+                        statement=proposition.statement,
+                        provision_text=provision.text,
+                        exclude=answered_by,
+                    )
+                else:
+                    supported = verifier.verify(
+                        statement=proposition.statement,
+                        provision_text=provision.text,
+                    )
+            except VerifierUnavailable as exc:
+                _LOGGER.warning("entailment verifier unavailable: %s", exc)
+                return _Verdict.UNVERIFIED
+            except Exception:
+                # Deliberately broad: a verifier that fails in any way has not
+                # verified this statement, and must never read as a pass.
+                _LOGGER.warning("entailment verifier raised a fault", exc_info=True)
+                return _Verdict.UNVERIFIED
+            return _Verdict.SUPPORTED if supported else _Verdict.UNSUPPORTED
 
         workers = min(len(propositions), MAX_VERIFIER_CONCURRENCY)
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(grade, proposition) for proposition in propositions]
-            try:
-                verdicts = [future.result() for future in futures]
-            except VerifierUnavailable as exc:
-                _LOGGER.warning("entailment verifier unavailable: %s", exc)
-                return AnswerRefusalCode.ENTAILMENT_UNAVAILABLE
-            except Exception:
-                # Deliberately broad: a verifier that fails in any way has not
-                # verified anything, and must never read as a pass.
-                _LOGGER.warning("entailment verifier raised a fault", exc_info=True)
-                return AnswerRefusalCode.ENTAILMENT_UNAVAILABLE
-
-        if not all(verdicts):
-            return AnswerRefusalCode.ENTAILMENT_UNSUPPORTED
-        return None
+            return tuple(pool.map(grade, propositions))
 
     def _draft(
         self,

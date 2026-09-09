@@ -8,7 +8,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from ..answering.models import GroundedAnswer
+from ..answering.models import GroundedAnswer, WithheldReason
 from ..answering.provisions import CataloguedProvision
 from ..answering.types import AnswerRefusalCode
 from .settings import DISCLAIMER
@@ -59,14 +59,38 @@ class PropositionBody(BaseModel):
     citation: CitationBody
 
 
+class WithheldBody(BaseModel):
+    """One proposition dropped at level 3, named by pinpoint and reason only.
+
+    The unverified statement text is deliberately absent: a statement that
+    failed entailment is the confident-but-wrong content the pipeline exists to
+    keep out of an answer, so it is never rendered — only the fact of its
+    withholding and why.
+    """
+
+    model_config = _STRICT
+
+    pinpoint: str
+    reason: WithheldReason
+
+
 class AnswerBody(BaseModel):
-    """A fully cited answer."""
+    """A fully cited answer, possibly partial.
+
+    When `withheld` is non-empty the answer is partial: `partial` is true, the
+    listed propositions are the ones that passed every check, and each withheld
+    entry names a part that was dropped and why. The outcome stays ANSWERED — a
+    partial answer is still an answer — while `partial` and `withheld` make the
+    incompleteness explicit rather than silent.
+    """
 
     model_config = _STRICT
 
     outcome: str = "ANSWERED"
     disclaimer: str
     propositions: tuple[PropositionBody, ...]
+    partial: bool = False
+    withheld: tuple[WithheldBody, ...] = ()
 
 
 class RefusalBody(BaseModel):
@@ -92,9 +116,17 @@ class HealthBody(BaseModel):
 
 
 def render_answer(answer: GroundedAnswer, disclaimer: str) -> AnswerBody:
-    """Render a validated answer without re-deriving any legal content."""
+    """Render a validated answer without re-deriving any legal content.
+
+    Withheld propositions are rendered by pinpoint and reason only; their
+    unverified statement text is never copied into the response.
+    """
 
     return AnswerBody(
+        partial=bool(answer.withheld),
+        withheld=tuple(
+            WithheldBody(pinpoint=item.pinpoint, reason=item.reason) for item in answer.withheld
+        ),
         disclaimer=disclaimer,
         propositions=tuple(
             PropositionBody(

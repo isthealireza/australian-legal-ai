@@ -12,6 +12,8 @@ from .models import (
     GroundedAnswerRequest,
     ModelDraft,
     Proposition,
+    WithheldProposition,
+    WithheldReason,
 )
 from .protocol import LegalAnswerModel
 from .providers import OpenRouterAnswerModel, OpenRouterConfig, load_openrouter_config
@@ -58,6 +60,8 @@ __all__ = [
     "OpenRouterEntailmentVerifier",
     "Proposition",
     "VerifierUnavailable",
+    "WithheldProposition",
+    "WithheldReason",
     "load_openrouter_config",
     "validate_draft",
 ]

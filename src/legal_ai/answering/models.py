@@ -12,8 +12,9 @@ cannot leak a legal statement, because there is nowhere to put one.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints
@@ -110,11 +111,46 @@ class Proposition(BaseModel):
     citation: Citation
 
 
+class WithheldReason(StrEnum):
+    """Why a single proposition was withheld from an otherwise cited answer."""
+
+    #: The verifier ran and judged the statement not supported by the text.
+    UNSUPPORTED = "UNSUPPORTED"
+    #: The verifier could not return a verdict for this statement, so it is
+    #: withheld rather than surfaced unverified — an unavailable check never
+    #: degrades into a pass, at the level of one proposition just as before.
+    UNVERIFIED = "UNVERIFIED"
+
+
+@dataclass(frozen=True, slots=True)
+class WithheldProposition:
+    """A proposition that did not pass level 3 and was dropped from the answer.
+
+    It carries the pinpoint it concerned and the reason it was withheld, so the
+    answer can say plainly that a part was withheld and why. The unverified
+    statement text is retained on the object for auditing but must never be
+    rendered into a response: a statement that failed entailment is exactly the
+    confident-but-wrong content the pipeline exists to keep out of an answer.
+    """
+
+    statement: str
+    pinpoint: str
+    reason: WithheldReason
+
+
 @dataclass(frozen=True, slots=True)
 class GroundedAnswer:
-    """A fully validated, fully cited answer."""
+    """A fully validated, fully cited answer.
+
+    Every proposition in `propositions` passed levels 1-3. `withheld` names any
+    proposition dropped at level 3 while at least one other survived: the answer
+    is partial, not total, and says so. When `withheld` is empty the answer is
+    complete. An answer with no surviving proposition is never a `GroundedAnswer`
+    — it is an `AnswerRefused`.
+    """
 
     propositions: tuple[Proposition, ...]
+    withheld: tuple[WithheldProposition, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
