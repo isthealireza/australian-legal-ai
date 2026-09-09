@@ -36,6 +36,23 @@ built on this tip does not re-introduce a fresh literal.
   real-shaped key. Verified: same assembled inputs, same assertions, 57 passed
   / 1 skipped in the file, unchanged.
 
+## Review-gate finding — rejected as a false positive
+
+The DeepSeek gate returned `BLOCKED` on one high finding,
+`SEC-TEST-WEAKENING-001`, claiming the quoted lowercased fixture
+`"api_key = 'sk-or-v1-…'"` was changed to an unquoted
+`f"api_key = …"`, removing the surrounding single quotes and weakening the
+quoted-lowercased redaction path.
+
+Rejected — the gate misread the f-string interpolation. The new fixture is
+`f"api_key = '{_OR}00000000000000000000000000000000'"`, which keeps the single
+quotes (they are inside the f-string) and assembles to
+`api_key = 'sk-or-v1-00000000000000000000000000000000'` — byte-for-byte the
+original. The diff shows the quotes retained (`+ f"api_key = '{_OR}…'"`), and
+`test_lowercase_secret_assignments_are_redacted` passes with the identical input.
+No quotes were removed and no coverage was lost. No code change.
+
 ## Definition of done
 
-ruff, ruff format --check, mypy, pytest, then the DeepSeek review gate.
+ruff, ruff format --check, mypy, pytest, then the DeepSeek review gate
+(BLOCKED on one finding, verified above as a false positive).
