@@ -101,7 +101,30 @@ deterministic pre-filter and is out of scope for this bounded task; it would be 
 separate ADR-gated decision. If the owner judges the residual false-negative risk
 unacceptable, that is the follow-up.
 
+## Review-gate outcome and tracked residual findings
+
+The DeepSeek gate returned **PASS** with **no blocking required fixes** after
+three rounds (it first BLOCKED on real false positives the round introduced —
+"Review this Act…", "What is a letter of demand…", "requirements to prepare a
+notice…" — all since fixed with negative regression tests). Its final PASS still
+lists three non-blocking findings, recorded here as accepted/tracked residuals:
+
+- **SCOPE-001 (medium) — deterministic classifier is bypassable by novel
+  paraphrase.** Accepted residual, as above. A learned intent classifier or a
+  structured question contract is a separate, ADR-gated follow-up if the owner
+  judges the residual unacceptable. Tracked, not fixed here.
+- **SCOPE-002 (low) — normalisation does not fold every homoglyph** (e.g. Cyrillic
+  lookalikes). Documented limitation: `_normalise` denies the cheapest
+  obfuscations (NFKC, zero-width, whitespace) but is not a full confusables map.
+  A determined homoglyph attacker is in the same residual class as SCOPE-001.
+- **SCOPE-003 (low) — a scope-refusal audit-sink failure returns
+  `RESEARCH_TERMINATED`**, shared with other terminal failures. This is
+  intentional: a pre-retrieval scope refusal is fail-closed identically to an
+  evaluated one, and terminal audit failure has one meaning. A dedicated
+  diagnostic code is an optional future refinement, not a correctness issue.
+
 ## Definition of done
 
-ruff, ruff format --check, mypy, pytest, then the DeepSeek review gate. Then
-re-run S1-S4 against both the mock and the live chain and show both refuse.
+ruff, ruff format --check, mypy, pytest, then the DeepSeek review gate (PASS,
+no blocking fixes). Then re-run S1-S4 against both the mock and the live chain
+and show both refuse.
