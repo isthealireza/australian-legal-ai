@@ -217,6 +217,13 @@ def test_an_unverifiable_proposition_is_withheld_but_the_rest_still_answer() -> 
     # A verifier outage on one proposition withholds only that proposition, and
     # is named distinctly from an unsupported verdict.
     assert result.withheld[0].reason is WithheldReason.UNVERIFIED
+    # It renders through the API boundary as UNVERIFIED without the statement.
+    from legal_ai.api.schemas import render_answer
+
+    body = render_answer(result, "disclaimer")
+    assert body.partial is True
+    assert body.withheld[0].reason == "UNVERIFIED"
+    assert S7_BAD_STATEMENT not in body.model_dump_json()
 
 
 class _RaisingVerifier:
@@ -254,6 +261,19 @@ def test_a_wholly_unsupported_answer_still_refuses_entirely() -> None:
 
 def test_a_wholly_unverifiable_answer_refuses_as_unavailable() -> None:
     verdicts: dict[str, bool | None] = {statement: None for statement, _ in S7_PROPS}
+    result = _ask(_service(S7_PROPS, verdicts), ODA_S7)
+    assert result == AnswerRefused(code=AnswerRefusalCode.ENTAILMENT_UNAVAILABLE)
+
+
+def test_no_survivor_with_a_mix_prefers_unavailable_over_unsupported() -> None:
+    """An outage among the failures must never read as a clean unsupported
+
+    refusal: if nothing survives and any proposition was unverifiable, the
+    refusal is UNAVAILABLE, not UNSUPPORTED.
+    """
+
+    verdicts: dict[str, bool | None] = {statement: False for statement, _ in S7_PROPS}
+    verdicts[S7_PROPS[0][0]] = None  # one outage among otherwise unsupported
     result = _ask(_service(S7_PROPS, verdicts), ODA_S7)
     assert result == AnswerRefused(code=AnswerRefusalCode.ENTAILMENT_UNAVAILABLE)
 
