@@ -27,6 +27,7 @@ from legal_ai.answering.models import (
     ModelDraft,
     WithheldReason,
 )
+from legal_ai.answering.provisions import FileDerivedProvisionStore
 from legal_ai.answering.service import AnswerQuestion, GroundedAnswerService
 from legal_ai.answering.types import AnswerRefusalCode
 from legal_ai.answering.verification import VerifierUnavailable
@@ -144,20 +145,22 @@ class ReplayVerifier:
         return verdict
 
 
-def _service(
-    props: list[tuple[str, str]], verdicts: dict[str, bool | None]
-) -> GroundedAnswerService:
-    from legal_ai.answering.provisions import FileDerivedProvisionStore
-
+def _service_with(model: object, verifier: object) -> GroundedAnswerService:
     return GroundedAnswerService(
         research=WaResearchService(
             corpus=RecordedWaCorpus(RECORDED_FIXTURE_ROOT),
             audit_sink=InMemoryResearchAuditSink(),
         ),
-        model=ScriptedAnswerModel(props),
+        model=model,  # type: ignore[arg-type]
         provisions=FileDerivedProvisionStore(RECORDED_FIXTURE_ROOT),
-        verifier=ReplayVerifier(verdicts),
+        verifier=verifier,  # type: ignore[arg-type]
     )
+
+
+def _service(
+    props: list[tuple[str, str]], verdicts: dict[str, bool | None]
+) -> GroundedAnswerService:
+    return _service_with(ScriptedAnswerModel(props), ReplayVerifier(verdicts))
 
 
 def _ask(service: GroundedAnswerService, query_fields: dict[str, str]) -> object:
@@ -213,6 +216,33 @@ def test_an_unverifiable_proposition_is_withheld_but_the_rest_still_answer() -> 
     assert len(result.withheld) == 1
     # A verifier outage on one proposition withholds only that proposition, and
     # is named distinctly from an unsupported verdict.
+    assert result.withheld[0].reason is WithheldReason.UNVERIFIED
+
+
+class _RaisingVerifier:
+    """Raises a non-`VerifierUnavailable` error for one statement, True otherwise.
+
+    Confirms the broad fault path: any verifier exception withholds only the one
+    proposition it graded and never reads as a pass.
+    """
+
+    def __init__(self, failing: str) -> None:
+        self._failing = failing
+
+    def verify(self, *, statement: str, provision_text: str) -> bool:
+        del provision_text
+        if statement == self._failing:
+            raise RuntimeError("boom")
+        return True
+
+
+def test_a_generic_verifier_fault_withholds_only_that_proposition() -> None:
+    service = _service_with(ScriptedAnswerModel(S7_PROPS), _RaisingVerifier(S7_BAD_STATEMENT))
+    result = _ask(service, ODA_S7)
+    assert isinstance(result, GroundedAnswer)
+    assert len(result.propositions) == 3
+    assert S7_BAD_STATEMENT not in {p.statement for p in result.propositions}
+    assert len(result.withheld) == 1
     assert result.withheld[0].reason is WithheldReason.UNVERIFIED
 
 
@@ -285,3 +315,9 @@ def test_api_render_surfaces_withheld_reason_without_leaking_the_statement() -> 
     assert body.partial is True
     # The unverified statement text is never republished, anywhere in the body.
     assert S7_BAD_STATEMENT not in dumped
+
+    # A complete answer renders as not partial with no withheld entries.
+    supported = Proposition(statement="A supported claim.", citation=citation)
+    complete = render_answer(GroundedAnswer(propositions=(supported,)), "disclaimer")
+    assert complete.partial is False
+    assert complete.withheld == ()
