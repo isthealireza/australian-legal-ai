@@ -35,20 +35,36 @@ class RequestKind(StrEnum):
     DOCUMENT_DRAFTING = "DOCUMENT_DRAFTING"
 
 
-_INSTRUMENT = r"(?:contract|clause|agreement|document|term|deed|lease|policy|schedule|invoice)"
+_INSTRUMENT = (
+    r"(?:contract|clause|agreement|document|paperwork|term|deed|lease|"
+    r"policy|schedule|invoice|letter|notice|memo|affidavit|submission)"
+)
+#: A supplied instrument: the user's own, or one they attached/pasted. This
+#: anchor is what keeps a mere mention of a contract from being read as a review
+#: request — a signal only counts when it points at *their* document.
+_SUPPLIED = rf"(?:my|our|this|that|the|your)\s+(?:attached\s+|above\s+)?{_INSTRUMENT}"
+
+#: Verbs that ask the system to produce a document.
+_DRAFT_VERB = r"(?:draft|write|prepare|draw\s+up|put\s+together|compose|knock\s+up)"
+#: Verbs that ask the system to assess a supplied document.
+_REVIEW_VERB = (
+    r"(?:review|analyse|analyze|assess|check|vet|examine|"
+    r"look\s+over|go\s+over|look\s+at|read\s+over)"
+)
+_DOC_NOUN = (
+    r"(?:letter|notice|agreement|contract|clause|demand|deed|memo|"
+    r"submission|affidavit|filing|response|schedule)"
+)
 
 #: Asking the system to produce a document. Order matters: drafting is checked
 #: first because "draft a letter ... citing section 22" also names a provision.
 _DRAFTING_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
-        r"\bdraft\s+(?:me\s+)?(?:a|an|the)\b",
-        r"\bwrite\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:letter|notice|agreement|contract|clause|"
-        r"demand|deed|memo|submission|affidavit)\b",
-        r"\bprepare\s+(?:me\s+)?(?:a|an|the)\b[^.?!]*\b(?:letter|notice|agreement|document|"
-        r"demand|deed|submission|filing|affidavit)\b",
+        rf"\b{_DRAFT_VERB}\s+(?:me\s+)?(?:a|an|the|my|this)\b[^.?!]*\b{_DOC_NOUN}\b",
         r"\bletter\s+of\s+demand\b",
         r"\bmake\s+it\s+ready\s+to\s+send\b",
+        r"\bready\s+to\s+send\b",
     )
 )
 
@@ -56,19 +72,37 @@ _DRAFTING_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 _REVIEW_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
-        rf"\breview\s+(?:this|that|my|the)\s+{_INSTRUMENT}\b",
+        rf"\b{_REVIEW_VERB}\s+{_SUPPLIED}\b",
+        rf"\b{_REVIEW_VERB}\s+(?:this|that|the|it)\b[^.?!]{{0,40}}\b(?:for\s+me|for\s+compliance|"
+        r"against\s+section|and\s+(?:tell|advise|let)\s+me)\b",
         r"\b(?:i\s*am|i'?m)\s+pasting\b",
-        rf"\bhere\s+is\s+(?:my|the|our)\s+{_INSTRUMENT}\b",
-        rf"\b{_INSTRUMENT}\s+(?:says|states|reads|stipulates|excludes|warrants)\b",
-        r"\bshould\s+i\s+sign\b",
-        r"\badvise\s+(?:my|the)\s+client\b",
-        r"\bwhether\b[^.?!]{0,60}\b(?:enforceable|void|valid|binding)\b",
+        rf"\bhere\s+is\s+{_SUPPLIED}\b",
+        rf"\b{_INSTRUMENT}\s+(?:says|states|reads|stipulates|excludes|warrants|provides\s+that)\b",
+        r"\bshould\s+i\s+(?:sign|accept|agree\s+to)\b",
+        r"\badvise\s+(?:my|the|our)\s+client\b",
+        # Validity/enforceability, but only anchored to the user's own instrument
+        # ("is my contract enforceable"), never a bare research question about
+        # whether something is valid.
+        rf"\b(?:is|are|whether)\b[^.?!]{{0,30}}\b(?:my|our|attached)\s+(?:\w+\s+){{0,3}}?"
+        rf"{_INSTRUMENT}\b[^.?!]{{0,30}}\b(?:enforceable|void|valid|binding|lawful)\b",
+        rf"\b(?:my|our|attached)\s+(?:\w+\s+){{0,3}}?{_INSTRUMENT}\b[^.?!]{{0,30}}\b"
+        r"(?:enforceable|void|valid|binding|lawful)\b",
     )
 )
 
 
 def classify_request_kind(question: str) -> RequestKind:
-    """Classify one question. RESEARCH unless it asks for review or drafting."""
+    """Classify one question. RESEARCH unless it asks for review or drafting.
+
+    Deterministic and conservative: it matches the *act being asked for* against
+    a supplied instrument, not a mention of a contract, so it does not refuse a
+    legislation-research question that discusses contracts, validity, or
+    enforceability in the abstract. It is a pre-filter, not the only control: a
+    request it does not match still faces retrieval, citation validation, and
+    entailment, none of which this weakens. A novel paraphrase it misses is a
+    false negative to close by adding a pattern, never a downstream bypass of the
+    grounding checks.
+    """
 
     for pattern in _DRAFTING_PATTERNS:
         if pattern.search(question):

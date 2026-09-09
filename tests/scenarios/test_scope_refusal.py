@@ -10,9 +10,11 @@ evidence packet is produced, and no citation is authored.
 Grounding: there is no recorded manifest for a contract-review or
 document-upload capability, and no recorded provision exists for the cited
 sections. The expected outcome is therefore a typed refusal in every case.
-Scope is a boundary rule held by the surrounding application, not a field of
-``ResearchQuery``; that gap is reported in the task report rather than fixed
-here.
+Scope is now also a control in its own right: the answering pipeline classifies
+the request kind from the question text and refuses a contract/document review
+or drafting request with ``REQUEST_OUT_OF_SCOPE`` before any retrieval or model
+call (``legal_ai.answering.scope``), rather than relying on the request merely
+failing to ground.
 """
 
 from __future__ import annotations
@@ -85,10 +87,11 @@ def test_out_of_scope_request_is_refused_with_no_packet(
 
 
 def test_out_of_scope_request_is_refused_by_the_full_answering_pipeline() -> None:
-    # The whole Phase 5 chain (research service + mock model) refuses the same
-    # out-of-scope request: RESEARCH_REFUSED, never a GroundedAnswer with
-    # citations. The refusal happens before any model call because the research
-    # step cannot ground the request.
+    # The whole Phase 5 chain (research service + mock model) refuses a contract
+    # review request, never a GroundedAnswer with citations. The scope gate
+    # classifies the request kind and refuses REQUEST_OUT_OF_SCOPE before any
+    # retrieval or model call — the precise reason, not merely that it could not
+    # ground. The mock model is the configuration that used to answer such probes.
     service = GroundedAnswerService(
         research=WaResearchService(
             corpus=RecordedWaCorpus(FIXTURE_ROOT),
@@ -110,5 +113,5 @@ def test_out_of_scope_request_is_refused_by_the_full_answering_pipeline() -> Non
     )
 
     assert isinstance(result, AnswerRefused)
-    assert result.code is AnswerRefusalCode.RESEARCH_REFUSED
+    assert result.code is AnswerRefusalCode.REQUEST_OUT_OF_SCOPE
     assert not isinstance(result, GroundedAnswer)

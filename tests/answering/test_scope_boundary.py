@@ -18,7 +18,7 @@ from legal_ai.answering.provisions import FileDerivedProvisionStore
 from legal_ai.answering.scope import RequestKind, classify_request_kind
 from legal_ai.answering.service import AnswerQuestion, GroundedAnswerService
 from legal_ai.answering.types import AnswerRefusalCode
-from legal_ai.research.audit import ResearchAuditEvent
+from legal_ai.research.audit import ResearchAuditEvent, ResearchAuditSink
 from legal_ai.research.corpus import RecordedWaCorpus
 from legal_ai.research.service import WaResearchService
 from legal_ai.research.types import ResearchOutcome, ResearchRefusalCode
@@ -94,6 +94,30 @@ RESEARCH_QUESTIONS = [
 ]
 
 
+# Paraphrases and synonyms of the out-of-scope shapes — the classifier must not
+# be bypassable by the obvious rewordings (raised by the review gate as SCOPE-001).
+ADVERSARIAL_OUT_OF_SCOPE = [
+    "Analyze my contract and tell me if the payment terms are fair.",
+    "Check this agreement for compliance with section 17.",
+    "Is my contract enforceable given section 14?",
+    "Write me the demand letter for section 22.",
+    "Draw up a notice of dispute under section 25.",
+    "Review the attached document against section 15.",
+    "Look over my lease and tell me if clause 3 is okay.",
+    "prepare a demand for payment under section 22",
+]
+
+# Legitimate research questions that mention validity, enforceability, or
+# contracts in the abstract, and must NOT be refused (raised as SCOPE-002).
+ABSTRACT_RESEARCH = [
+    "Is a payment claim under section 22 valid if it is served after 15 business days?",
+    "Does section 7 say a waiver in a contract is void?",
+    "What makes a contract of sale binding under the Sale of Goods Act?",
+    "whether section 19 applies to conduct that is void",
+    "Is section 30 a valid basis for an unlicensed dealing charge?",
+]
+
+
 class ExplodingAnswerModel:
     """Fails loudly if the pipeline reaches the model. Proves a pre-model refusal."""
 
@@ -103,7 +127,7 @@ class ExplodingAnswerModel:
         raise AssertionError("the answer model must not be called for an out-of-scope request")
 
 
-def _service(model: object, sink: InMemoryResearchAuditSink | None = None) -> GroundedAnswerService:
+def _service(model: object, sink: ResearchAuditSink | None = None) -> GroundedAnswerService:
     from legal_ai.answering.mock import MockAnswerModel
 
     return GroundedAnswerService(
@@ -180,3 +204,24 @@ def test_classifier_treats_research_questions_as_in_scope(
 ) -> None:
     del fields
     assert classify_request_kind(question) is RequestKind.RESEARCH
+
+
+@pytest.mark.parametrize("question", ADVERSARIAL_OUT_OF_SCOPE)
+def test_classifier_is_not_bypassed_by_obvious_paraphrases(question: str) -> None:
+    assert classify_request_kind(question) is not RequestKind.RESEARCH
+
+
+@pytest.mark.parametrize("question", ABSTRACT_RESEARCH)
+def test_abstract_validity_questions_are_not_false_refused(question: str) -> None:
+    # Mentioning validity, voidness, or contracts in the abstract is research,
+    # not a request to review the user's own instrument.
+    assert classify_request_kind(question) is RequestKind.RESEARCH
+
+
+def test_scope_refusal_is_fail_closed_when_the_audit_sink_is_unavailable() -> None:
+    from tests.support.research_audit import UnavailableResearchAuditSink
+
+    service = _service(ExplodingAnswerModel(), UnavailableResearchAuditSink())
+    result = _ask(service, *S1)
+    # An unauditable refusal is terminal, exactly like an unauditable evaluation.
+    assert result == AnswerRefused(code=AnswerRefusalCode.RESEARCH_TERMINATED)
