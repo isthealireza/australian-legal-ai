@@ -1,12 +1,9 @@
 """Provision routing: the user describes a problem, the system picks the provision.
 
-Routing adds a step in front of the existing pipeline and weakens nothing behind
-it. It selects only from the recorded catalogue, validates the model's choice
-deterministically against that catalogue before anything else runs, and yields
-one of: a chosen provision (which then runs the unchanged answer pipeline), a
-short candidate list for the user to confirm, or a refusal — never a nearest
-match, never an invented Act or section. An out-of-scope request is refused by
-the existing scope gate before the router spends a model call.
+Tests added in the gate-remediation pass:
+- empty catalogue → CATALOGUE_EMPTY (not 503 / ROUTER_UNAVAILABLE)
+- hyphenated provision identifiers are not collapsed by normalisation
+- malformed router choice entries raise RouterUnavailable (not silent NO_MATCHING_PROVISION)
 """
 
 from __future__ import annotations
@@ -15,7 +12,8 @@ import pytest
 
 from legal_ai.answering.mock import MockAnswerModel
 from legal_ai.answering.models import GroundedAnswer
-from legal_ai.answering.provisions import FileDerivedProvisionStore
+from legal_ai.answering.providers.router import _parse_draft
+from legal_ai.answering.provisions import CataloguedProvision, FileDerivedProvisionStore
 from legal_ai.answering.routing import (
     ProvisionRoutingService,
     RouteCandidates,
@@ -243,3 +241,54 @@ def test_validate_route_caps_candidates_and_dedupes() -> None:
     assert isinstance(decision, RouteCandidates)
     assert len(decision.choices) == 3  # deduped s13, then s14, s15 — capped at three
     assert [c.provision_identifier for c in decision.choices] == ["s 13", "s 14", "s 15"]
+
+
+# --- gate-remediation additions ---
+
+
+def test_empty_catalogue_returns_catalogue_empty_refusal() -> None:
+    service = ProvisionRoutingService(
+        router=ScriptedRouter(("Road Traffic Act 1974", "s 55", "x")),
+        answer_service=_answer_service(),
+        catalogue=(),
+    )
+    result = service.route("A genuine driving question.")
+    assert result == RouteRefused(code=RouteRefusalCode.CATALOGUE_EMPTY)
+
+
+def test_validate_route_distinguishes_hyphenated_identifier_from_numeric() -> None:
+    # s 1-5 and s 15 must NOT collapse to the same normalised key.
+    catalogue = (
+        CataloguedProvision(
+            act_title="Test Act 1999",
+            jurisdiction="WA",
+            provision_identifier="s 1-5",
+            pinpoint="section 1-5",
+            heading=None,
+            source_version=None,
+        ),
+    )
+    # The router claims "s 15" which normalises differently from "s 1-5".
+    draft = RouterDraft(
+        choices=(
+            RouterChoiceDraft(act_title="Test Act 1999", provision_identifier="s 15", reason="x"),
+        )
+    )
+    decision = validate_route(draft, catalogue)
+    # s 15 should not match s 1-5, so no provision is returned.
+    assert isinstance(decision, RouteRefused)
+    assert decision.code == RouteRefusalCode.NO_MATCHING_PROVISION
+
+
+@pytest.mark.parametrize(
+    "raw_json",
+    [
+        '{"choices": [42]}',
+        '{"choices": [{"act_title": 123, "provision_identifier": "s 1"}]}',
+        '{"choices": [{"provision_identifier": "s 1"}]}',
+    ],
+    ids=["non_dict_item", "non_str_act_title", "missing_act_title"],
+)
+def test_parse_draft_malformed_choice_entry_raises_router_unavailable(raw_json: str) -> None:
+    with pytest.raises(RouterUnavailable):
+        _parse_draft(raw_json)

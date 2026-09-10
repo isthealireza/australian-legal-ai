@@ -131,14 +131,15 @@ def _resolve_router(settings: ApiSettings) -> ProvisionRouter | None:
     del settings
     if answer_provider_name() == MOCK:
         return None
-    specs = answer_chain_specs()
-    if not specs:
-        return None
-    provider, model = specs[0]
-    config = build_config(provider, model)
-    if config is None:
-        return None
-    return ChatCompletionsProvisionRouter(config)
+    for provider, model in answer_chain_specs():
+        config = build_config(provider, model)
+        if config is None:
+            _LOGGER.warning(
+                "answer provider %s is not configured for routing; trying next", provider
+            )
+            continue
+        return ChatCompletionsProvisionRouter(config)
+    return None
 
 
 def _resolve_verifier(settings: ApiSettings) -> EntailmentVerifier | None:
@@ -250,16 +251,16 @@ def create_app(
     app.state.catalogue = (
         provisions.catalogue() if isinstance(provisions, FileDerivedProvisionStore) else ()
     )
-    # Routing needs the answer service, a router, and a non-empty catalogue.
-    # Missing any of these, the endpoint reports unavailable and the situation
-    # list stays as the fallback.
+    # Routing needs the answer service and a router. An empty catalogue is
+    # allowed — ProvisionRoutingService returns CATALOGUE_EMPTY in that case,
+    # which is a correct typed refusal rather than a 503 unavailability.
     app.state.routing_service = (
         ProvisionRoutingService(
             router=provision_router,
             answer_service=service,
             catalogue=app.state.catalogue,
         )
-        if service is not None and provision_router is not None and app.state.catalogue
+        if service is not None and provision_router is not None
         else None
     )
 

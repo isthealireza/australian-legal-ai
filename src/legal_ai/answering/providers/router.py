@@ -154,12 +154,12 @@ def _parse_draft(content: str) -> RouterDraft:
     choices: list[RouterChoiceDraft] = []
     for item in raw:
         if not isinstance(item, dict):
-            continue
+            raise RouterUnavailable("router returned a non-object choice entry")
         act_title = item.get("act_title")
         provision = item.get("provision_identifier")
         reason = item.get("reason")
         if not isinstance(act_title, str) or not isinstance(provision, str):
-            continue
+            raise RouterUnavailable("router returned a choice missing required string fields")
         choices.append(
             RouterChoiceDraft(
                 act_title=act_title.strip(),

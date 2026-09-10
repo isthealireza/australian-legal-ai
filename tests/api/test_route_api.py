@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -99,3 +100,24 @@ def test_route_is_unavailable_without_a_router(unrouted_client: TestClient) -> N
     resp = unrouted_client.post("/api/route", json={"problem": "A genuine driving question."})
     assert resp.status_code == 503
     assert resp.json()["code"] == "ROUTER_UNAVAILABLE"
+
+
+def test_route_with_empty_catalogue_returns_catalogue_empty_not_503(tmp_path: Path) -> None:
+    # tmp_path is an empty directory → FileDerivedProvisionStore returns () catalogue.
+    # A router is present, so routing_service is created (after the AC6 fix that
+    # removed the catalogue-emptiness guard from create_app). CATALOGUE_EMPTY is a
+    # correct typed refusal (200), not a 503 service-unavailability.
+    settings = ApiSettings(
+        corpus_root=RECORDED_FIXTURE_ROOT,
+        audit_log_path=None,
+        provision_root=tmp_path,
+    )
+    with TestClient(
+        create_app(settings=settings, router=ScriptedRouter(("Road Traffic Act 1974", "s 55", "x")))
+    ) as client:
+        resp = client.post("/api/route", json={"problem": "A genuine driving question."})
+    # CATALOGUE_EMPTY is a server-side unavailability (503), not a normal routing
+    # outcome — but the code must be CATALOGUE_EMPTY, not ROUTER_UNAVAILABLE, so
+    # the caller can distinguish "no router" from "router present but nothing indexed".
+    assert resp.status_code == 503
+    assert resp.json()["code"] == "CATALOGUE_EMPTY"

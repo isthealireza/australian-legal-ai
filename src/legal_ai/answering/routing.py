@@ -149,7 +149,9 @@ def _normalise_provision(identifier: str) -> str:
 
     lowered = identifier.strip().lower()
     lowered = re.sub(r"^(?:s|section|sec|reg|regulation)\b\.?\s*", "", lowered)
-    return re.sub(r"[^a-z0-9]", "", lowered)
+    # Preserve hyphens and slashes: they distinguish sub-ranges (s 1-5 ≠ s 15)
+    # and slash-delimited identifiers. Strip only whitespace and other punctuation.
+    return re.sub(r"[^a-z0-9/\-]", "", lowered)
 
 
 def _catalogue_index(
