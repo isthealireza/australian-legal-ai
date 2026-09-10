@@ -8,8 +8,15 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from ..answering.models import GroundedAnswer, WithheldReason
+from ..answering.models import AnswerRefused, GroundedAnswer, WithheldReason
 from ..answering.provisions import CataloguedProvision
+from ..answering.routing import (
+    RouteCandidates,
+    RouteChoice,
+    RoutedAnswer,
+    RouteRefusalCode,
+    RouteRefused,
+)
 from ..answering.types import AnswerRefusalCode
 from .settings import DISCLAIMER
 
@@ -201,3 +208,101 @@ def render_catalogue(catalogue: Sequence[CataloguedProvision]) -> CorpusBody:
         provision_count=len(catalogue),
         disclaimer=DISCLAIMER,
     )
+
+
+class RouteRequestBody(BaseModel):
+    """A described problem to route to a provision."""
+
+    model_config = _STRICT
+
+    problem: _BoundedText
+
+
+class RouteChoiceBody(BaseModel):
+    """A provision the router chose from the catalogue, with its rationale.
+
+    Shown so the choice is visible rather than magic. The identity fields are the
+    catalogue's own canonical values; `reason` is the router's short rationale.
+    """
+
+    model_config = _STRICT
+
+    act_title: str
+    jurisdiction: str
+    provision_identifier: str
+    pinpoint: str
+    heading: str | None
+    reason: str
+
+
+class RoutedAnswerBody(BaseModel):
+    """A routed provision and the pipeline's result for it."""
+
+    model_config = _STRICT
+
+    outcome: str = "ROUTED"
+    disclaimer: str
+    chosen: RouteChoiceBody
+    #: The unchanged pipeline's own result for the chosen provision: an answer,
+    #: possibly partial, or its own typed refusal.
+    answer: AnswerBody | RefusalBody
+
+
+class RouteCandidatesBody(BaseModel):
+    """Two or three provisions could fit; the user confirms which to research."""
+
+    model_config = _STRICT
+
+    outcome: str = "CANDIDATES"
+    disclaimer: str
+    candidates: tuple[RouteChoiceBody, ...]
+
+
+class RouteRefusalBody(BaseModel):
+    """No provision to research, with a typed reason and no legal content."""
+
+    model_config = _STRICT
+
+    outcome: str = "REFUSED"
+    disclaimer: str
+    code: RouteRefusalCode
+
+
+def _render_choice(choice: RouteChoice) -> RouteChoiceBody:
+    return RouteChoiceBody(
+        act_title=choice.act_title,
+        jurisdiction=choice.jurisdiction,
+        provision_identifier=choice.provision_identifier,
+        pinpoint=choice.pinpoint,
+        heading=choice.heading,
+        reason=choice.reason,
+    )
+
+
+def render_routed_answer(routed: RoutedAnswer, disclaimer: str) -> RoutedAnswerBody:
+    """Render a routed provision and the pipeline result it produced."""
+
+    if isinstance(routed.answer, GroundedAnswer):
+        answer: AnswerBody | RefusalBody = render_answer(routed.answer, disclaimer)
+    elif isinstance(routed.answer, AnswerRefused):
+        answer = RefusalBody(disclaimer=disclaimer, code=routed.answer.code)
+    else:  # pragma: no cover - exhaustive guard
+        answer = RefusalBody(disclaimer=disclaimer, code=AnswerRefusalCode.RESEARCH_TERMINATED)
+    return RoutedAnswerBody(
+        disclaimer=disclaimer, chosen=_render_choice(routed.choice), answer=answer
+    )
+
+
+def render_route_candidates(candidates: RouteCandidates, disclaimer: str) -> RouteCandidatesBody:
+    """Render a short candidate list for the user to confirm."""
+
+    return RouteCandidatesBody(
+        disclaimer=disclaimer,
+        candidates=tuple(_render_choice(choice) for choice in candidates.choices),
+    )
+
+
+def render_route_refusal(refused: RouteRefused, disclaimer: str) -> RouteRefusalBody:
+    """Render a routing refusal."""
+
+    return RouteRefusalBody(disclaimer=disclaimer, code=refused.code)

@@ -51,6 +51,22 @@
     </aside>
 
     <section>
+      <form class="panel composer" id="route-form">
+        <h2>Describe your problem</h2>
+        <div class="body">
+          <label class="field" for="problem">
+            <span class="lab">What happened, in your own words — the system picks the provision</span>
+            <textarea id="problem" name="problem" maxlength="4096"
+              placeholder="For example: I reversed into a parked car and drove off. What was I supposed to do?"></textarea>
+          </label>
+          <div class="actions">
+            <button class="btn" id="route-submit" type="submit">Find the provision</button>
+            <span class="hint" id="route-hint">Not sure which situation fits? Describe it and let the system choose. You can still pick one yourself below.</span>
+          </div>
+          <div id="route-result" aria-live="polite"></div>
+        </div>
+      </form>
+
       <form class="panel composer" id="form">
         <h2>Research a provision</h2>
         <div class="body">

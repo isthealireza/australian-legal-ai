@@ -25,6 +25,11 @@ const els = {
   clearHistory: document.getElementById("clear-history"),
   result: document.getElementById("result"),
   resultPanel: document.getElementById("result-panel"),
+  routeForm: document.getElementById("route-form"),
+  problem: document.getElementById("problem"),
+  routeSubmit: document.getElementById("route-submit"),
+  routeHint: document.getElementById("route-hint"),
+  routeResult: document.getElementById("route-result"),
   intro: document.getElementById("intro"),
   servicePill: document.getElementById("service-pill"),
   serviceText: document.getElementById("service-text"),
@@ -480,6 +485,126 @@ function renderHistory() {
     els.history.append(item);
   }
 }
+
+/* ------------------------------------------------------------------ routing */
+
+/* Plain-English explanation for each routing refusal code. Routing never
+ * invents a provision, so "nothing matches" is a real, honest outcome. */
+const ROUTE_REFUSALS = {
+  NO_MATCHING_PROVISION:
+    "Nothing in the indexed corpus covers this problem. Rather than guess at a nearest match, the system says so. It can only answer from the situations listed on the left.",
+  REQUEST_OUT_OF_SCOPE:
+    "This reads as a request to review or draft a document, which is out of scope. The system researches legislation; it does not review your contract or write letters.",
+  ROUTER_UNAVAILABLE:
+    "Routing needs the live model, which is not available right now. Pick the situation that fits from the list on the left and ask your question there.",
+  CATALOGUE_EMPTY:
+    "No provisions are indexed, so there is nothing to route to.",
+};
+
+function choiceTitle(choice) {
+  return choice.heading ? `${choice.pinpoint} — ${choice.heading}` : choice.pinpoint;
+}
+
+/* Fill the manual composer from a routed choice, so the chosen provision is
+ * visible and the user can research or adjust it by hand. */
+function adoptChoice(choice, problem) {
+  els.question.value = problem;
+  select({
+    act_title: choice.act_title,
+    jurisdiction: choice.jurisdiction,
+    provision_identifier: choice.provision_identifier,
+    pinpoint: choice.pinpoint,
+    heading: choice.heading ?? null,
+    title: choiceTitle(choice),
+  });
+  refreshSubmit();
+}
+
+/* Show which provision was chosen and why — the choice is visible, not magic. */
+function renderChosen(choice, label) {
+  const card = el("div", "routed-choice");
+  card.append(el("span", "tag answered", label));
+  card.append(el("p", "routed-prov",
+    `${choice.act_title} — ${choice.pinpoint}${choice.heading ? ` · ${choice.heading}` : ""}`));
+  if (choice.reason) card.append(el("p", "routed-why", `Why: ${choice.reason}`));
+  return card;
+}
+
+function renderRouteResult(payload) {
+  els.routeResult.replaceChildren();
+  const problem = els.problem.value.trim();
+
+  if (payload.outcome === "ROUTED") {
+    els.routeResult.append(renderChosen(payload.chosen, "Chosen provision"));
+    adoptChoice(payload.chosen, problem);
+    renderResult(payload.answer);
+    els.resultPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+
+  if (payload.outcome === "CANDIDATES") {
+    els.routeResult.append(el("p", "routed-lead",
+      "More than one provision could fit. Choose the one that matches, then research it."));
+    for (const choice of payload.candidates) {
+      const button = el("button", "candidate");
+      button.type = "button";
+      button.append(el("span", "cand-prov",
+        `${choice.act_title} — ${choice.pinpoint}${choice.heading ? ` · ${choice.heading}` : ""}`));
+      if (choice.reason) button.append(el("span", "cand-why", choice.reason));
+      button.addEventListener("click", () => {
+        adoptChoice(choice, problem);
+        els.question.focus();
+        els.form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+      els.routeResult.append(button);
+    }
+    return;
+  }
+
+  // REFUSED.
+  const block = el("div", "refusal");
+  block.append(el("p", "why",
+    ROUTE_REFUSALS[payload.code] ?? "The system did not route this to a provision."));
+  els.routeResult.append(block);
+}
+
+els.routeForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const problem = els.problem.value.trim();
+  if (!problem) return;
+
+  els.routeSubmit.disabled = true;
+  els.routeHint.textContent = "Choosing a provision…";
+  els.routeResult.replaceChildren();
+
+  const controller = new AbortController();
+  const expiry = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch("/api/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({ problem }),
+    });
+    if (response.status === 422) {
+      els.routeResult.replaceChildren(
+        el("div", "refusal", "The service rejected that as malformed. Try shortening the description."));
+      return;
+    }
+    renderRouteResult(await response.json());
+  } catch (error) {
+    els.routeResult.replaceChildren(el("div", "refusal", error.name === "AbortError"
+      ? "Routing timed out. Try again, or pick a situation from the list."
+      : "The service could not be reached."));
+  } finally {
+    window.clearInterval(0);
+    window.clearTimeout(expiry);
+    els.routeSubmit.disabled = false;
+    els.routeHint.textContent =
+      "Not sure which situation fits? Describe it and let the system choose. You can still pick one yourself below.";
+  }
+});
 
 /* ------------------------------------------------------------------ wiring */
 

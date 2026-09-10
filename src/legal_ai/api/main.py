@@ -31,11 +31,13 @@ from ..answering.providers.registry import (
     build_config,
     verify_chain_specs,
 )
+from ..answering.providers.router import ChatCompletionsProvisionRouter
 from ..answering.provisions import (
     DerivedProvisionStore,
     FileDerivedProvisionStore,
     NullDerivedProvisionStore,
 )
+from ..answering.routing import ProvisionRouter, ProvisionRoutingService
 from ..answering.service import GroundedAnswerService
 from ..answering.types import AnswerRefusalCode
 from ..answering.verification import (
@@ -48,7 +50,7 @@ from ..research.audit import ResearchAuditSink
 from ..research.corpus import RecordedWaCorpus
 from ..research.errors import RecordedCorpusError, ResearchAuditSinkUnavailable
 from ..research.service import WaResearchService
-from .routes import corpus, health, research
+from .routes import corpus, health, research, route
 from .settings import AnswerModelChoice, ApiSettings, load_settings
 
 _LOGGER = logging.getLogger("legal_ai.api")
@@ -116,6 +118,27 @@ def _resolve_model(settings: ApiSettings) -> LegalAnswerModel:
         return MockAnswerModel()
     _LOGGER.info("answer chain: %s", ", ".join(member.name for member in members))
     return ChainedAnswerModel(members)
+
+
+def _resolve_router(settings: ApiSettings) -> ProvisionRouter | None:
+    """Build a model-backed router from the primary answer provider, if any.
+
+    Routing needs a model to weigh known options. Without a live provider there
+    is no router: the endpoint reports itself unavailable and the situation list
+    remains the fallback, rather than a mock inventing a choice.
+    """
+
+    del settings
+    if answer_provider_name() == MOCK:
+        return None
+    specs = answer_chain_specs()
+    if not specs:
+        return None
+    provider, model = specs[0]
+    config = build_config(provider, model)
+    if config is None:
+        return None
+    return ChatCompletionsProvisionRouter(config)
 
 
 def _resolve_verifier(settings: ApiSettings) -> EntailmentVerifier | None:
@@ -200,12 +223,14 @@ def create_app(
     settings: ApiSettings | None = None,
     model: LegalAnswerModel | None = None,
     verifier: EntailmentVerifier | None = None,
+    router: ProvisionRouter | None = None,
 ) -> FastAPI:
     """Build the application. Every dependency is injectable for tests."""
 
     resolved = settings if settings is not None else load_settings()
     answer_model = model if model is not None else _resolve_model(resolved)
     entailment = verifier if verifier is not None else _resolve_verifier(resolved)
+    provision_router = router if router is not None else _resolve_router(resolved)
 
     app = FastAPI(title=TITLE, summary=SUMMARY, version="0.2.0")
     config_error = _configuration_error(resolved, entailment)
@@ -225,10 +250,23 @@ def create_app(
     app.state.catalogue = (
         provisions.catalogue() if isinstance(provisions, FileDerivedProvisionStore) else ()
     )
+    # Routing needs the answer service, a router, and a non-empty catalogue.
+    # Missing any of these, the endpoint reports unavailable and the situation
+    # list stays as the fallback.
+    app.state.routing_service = (
+        ProvisionRoutingService(
+            router=provision_router,
+            answer_service=service,
+            catalogue=app.state.catalogue,
+        )
+        if service is not None and provision_router is not None and app.state.catalogue
+        else None
+    )
 
     app.include_router(corpus.router)
     app.include_router(health.router)
     app.include_router(research.router)
+    app.include_router(route.router)
 
     static_dir = _static_dir()
     if static_dir is not None:
