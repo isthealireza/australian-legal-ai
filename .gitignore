@@ -52,3 +52,10 @@ tmp/
 
 # Local scratch (n8n tools, local audit logs) - not part of this repo
 .local/
+
+# Ruflo local secrets and runtime data
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
