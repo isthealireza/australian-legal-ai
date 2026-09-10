@@ -98,7 +98,11 @@ def test_selection_is_deterministic_across_repeated_calls() -> None:
 
 @pytest.mark.parametrize(
     "act_title",
-    ["Sale of Goods Act 1895", "Fair Trading Act 2010", "Road Transport Act 2013"],
+    [
+        "Road Transport Act 2013",
+        "Occupational Safety and Health Act 1984",
+        "Criminal Code Act Compilation Act 1913",
+    ],
 )
 def test_out_of_corpus_acts_select_nothing(act_title: str) -> None:
     corpus = RecordedWaCorpus(RECORDED_FIXTURE_ROOT)
