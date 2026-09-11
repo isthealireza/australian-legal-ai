@@ -1,0 +1,10 @@
+17. Right to progress payments
+(1) A person who, under a construction contract, has undertaken to carry out construction work, or to supply related goods and services, is entitled to receive payment under this section (a progress payment). Building and Construction Industry (Security of Payment) Act 2021
+(2) A progress payment to which a person is entitled under this section includes the following —
+(a) the final payment for construction work carried out, or for related goods and services supplied, under a construction contract;
+(b) a single or one-off payment for construction work carried out, or for related goods and services supplied, under a construction contract;
+(c) a milestone payment under a construction contract, being a payment that is based on an event or date.
+(3) A progress payment to which a person is entitled under this section does not include payment for any expenses, loss or damages incurred because of a breach of a construction contract.
+(4) The entitlement to receive a progress payment under this section is, subject to section 55(3), a separate and additional entitlement to any entitlement to payment under a construction contract, and accordingly a reference in this Act to a progress payment is a reference to a progress payment to which a person is entitled under this section.
+(5) A person is not entitled to receive a progress payment under this section in respect of anything for which the person is not entitled to monetary or other consideration under the Building Services (Registration) Act 2011 because of a contravention of section 7(1) of that Act.
+Notes for this section:

@@ -117,7 +117,7 @@ points, for whoever owns the next provider slice:
   and an operator-only review model that never enters the product request path.
 - No automatic cross-provider failover: a fallback chain would break audit
   identity and determinism.
-- ADR 0015 records level-3 entailment as independent *in prompt and call* but
+- ADR 0020 records level-3 entailment as independent *in prompt and call* but
   not *in vendor*. That remains an open question for the owner.
 
 **Correction to this task's own brief.** The T3 spec named

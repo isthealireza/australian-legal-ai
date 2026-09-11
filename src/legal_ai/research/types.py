@@ -41,6 +41,11 @@ class ResearchRefusalCode(StrEnum):
     CITATION_NOT_FOUND = "CITATION_NOT_FOUND"
     PINPOINT_MISMATCH = "PINPOINT_MISMATCH"
     HASH_MISMATCH = "HASH_MISMATCH"
+    #: The request asked for something outside the research boundary (contract or
+    #: document review, or document drafting; MVP_ROADMAP section 11). Decided
+    #: from the question text before any retrieval or model call, and audited
+    #: like any other refusal.
+    REQUEST_OUT_OF_SCOPE = "REQUEST_OUT_OF_SCOPE"
 
 
 class ResearchTerminalCode(StrEnum):

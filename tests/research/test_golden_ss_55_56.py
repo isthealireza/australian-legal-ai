@@ -342,10 +342,17 @@ def test_refusal_codes_are_frozen(
     assert event.requested_pinpoint == pinpoint
 
 
-def test_a_different_act_still_refuses_as_missing_retrieval() -> None:
+def test_an_act_absent_from_the_corpus_refuses_as_missing_retrieval() -> None:
+    """Uses a title that cannot exist, so corpus growth never invalidates it.
+
+    This previously named the Sale of Goods Act 1895, which was absent when the
+    harness was written and has since been recorded on `main`. The assertion was
+    about an *absent* Act, so the example was the stale part, not the intent.
+    """
+
     sink = InMemoryResearchAuditSink()
     service = WaResearchService(corpus=_corpus(), audit_sink=sink)
-    result = service.research(recorded_query(act_title="Sale of Goods Act 1895"))
+    result = service.research(recorded_query(act_title="No Such Act 2099"))
 
     assert isinstance(result, ResearchRefused)
     assert result.code is ResearchRefusalCode.RETRIEVAL_MISSING

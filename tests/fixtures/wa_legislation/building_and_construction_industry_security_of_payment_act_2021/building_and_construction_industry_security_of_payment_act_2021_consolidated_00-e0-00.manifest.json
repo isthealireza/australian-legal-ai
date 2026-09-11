@@ -1,0 +1,68 @@
+{
+  "source_id": "wa_legislation:building_and_construction_industry_security_of_payment_act_2021:consolidated:00-e0-00",
+  "source_system": "wa_legislation",
+  "jurisdiction": "WA",
+  "act": {
+    "title": "Building and Construction Industry (Security of Payment) Act 2021",
+    "jurisdiction": "WA",
+    "act_number": "004 of 2021",
+    "assent_date": "2021-06-25"
+  },
+  "provisions": [
+    {
+      "identifier": "s 17",
+      "pinpoint": "section 17",
+      "heading": "Right to progress payments"
+    },
+    {
+      "identifier": "s 18",
+      "pinpoint": "section 18",
+      "heading": "Amount of progress payment"
+    },
+    {
+      "identifier": "s 22",
+      "pinpoint": "section 22",
+      "heading": "Making payment claims"
+    },
+    {
+      "identifier": "s 25",
+      "pinpoint": "section 25",
+      "heading": "Response to payment claim: payment schedule"
+    }
+  ],
+  "version": {
+    "type": "consolidated",
+    "official_version": true,
+    "suffix": "00-e0-00",
+    "document_id": "mrdoc_46833",
+    "version_label": "Building and Construction Industry (Security of Payment) Act 2021 - [00-e0-00]",
+    "currency_start": "2024-02-01",
+    "currency_end": "current"
+  },
+  "status": {
+    "in_force": true,
+    "currency": "Current",
+    "status_date": "2024-02-01",
+    "source_statement": "Currency start 01 Feb 2024; Currency end: Current (in force)"
+  },
+  "request": {
+    "method": "GET",
+    "url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/RedirectURL?OpenAgent&query=mrdoc_46833.pdf",
+    "resolved_file_url": "https://www.legislation.wa.gov.au/legislation/prod/filestore.nsf/FileURL/mrdoc_46833.pdf/$FILE/Building%20and%20Construction%20Industry%20(Security%20of%20Payment)%20Act%202021%20-%20%5B00-e0-00%5D.pdf?OpenElement"
+  },
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a147300.html",
+  "retrieved_at_utc": "2026-09-08T04:18:09Z",
+  "http_status": 200,
+  "content_type": "application/pdf",
+  "content_length": 767632,
+  "file": "building_and_construction_industry_security_of_payment_act_2021_consolidated_00-e0-00.pdf",
+  "sha256": "9d78bc1fc594d61af5ec095c03d18b7c266aeb8fe52fd776611dee57574edd5b",
+  "encoding": "binary; application/pdf; stored byte-exact with no transformation, normalisation, re-serialisation, or correction",
+  "hash_convention": "SHA-256 computed over the exact stored file bytes; binary file, no trailing-newline convention applied",
+  "notes": [
+    "Whole-Act official consolidated PDF captured as a single shared fixture; s 17, s 18, s 22 and s 25 are recorded as pinpoints and derived to per-section text in the provisions/ subdirectory.",
+    "Recorded fixtures are a point-in-time snapshot for deterministic testing only. They are NOT a live legal-currency service and may not reflect amendments made after the retrieval timestamp.",
+    "Per-section exact-text extraction and deterministic validation are performed by scripts/ingest_wa_act.py (ADR 0013), using the scripts/derive_wa_provisions.py extraction logic.",
+    "The official host is www.legislation.wa.gov.au, a subdomain of legislation.wa.gov.au."
+  ]
+}
