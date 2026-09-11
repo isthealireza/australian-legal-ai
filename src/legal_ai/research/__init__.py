@@ -20,6 +20,7 @@ from .models import (
     ResearchQuery,
     WaEvidencePacket,
 )
+from .sections import VerifiedSection, section_text_digest, verify_section
 from .service import (
     ResearchRefused,
     ResearchResult,
@@ -40,6 +41,9 @@ from .types import (
 from .validation import validate_recorded_source
 
 __all__ = [
+    "VerifiedSection",
+    "section_text_digest",
+    "verify_section",
     "WA_ALLOWLISTED_HOSTS",
     "WA_JURISDICTION",
     "WA_SOURCE_SYSTEM",

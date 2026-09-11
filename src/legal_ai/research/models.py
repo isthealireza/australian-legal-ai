@@ -286,3 +286,10 @@ class RecordedWaSource:
     sha256: str | None
     source_content: bytes
     sections: tuple[RecordedSection, ...] = ()
+    #: Identity the companion sections file claims for itself. Recorded data,
+    #: untrusted: `sections.verify_section` refuses unless it equals this
+    #: source's own `source_id` and `sha256`. Defaulted so every existing
+    #: builder keeps working, and `None` means the file declared nothing, which
+    #: is itself a refusal at the gate rather than a pass.
+    sections_source_id: str | None = None
+    sections_source_document_sha256: str | None = None

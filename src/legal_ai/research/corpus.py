@@ -87,6 +87,15 @@ def _safe_content_path(manifest_path: Path, filename: str, root: Path) -> Path:
 
 
 @dataclass(frozen=True, slots=True)
+class _SectionsFile:
+    """What a companion sections file declared, all of it untrusted."""
+
+    sections: tuple[RecordedSection, ...] = ()
+    source_id: str | None = None
+    source_document_sha256: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class _ManifestEntry:
     manifest_path: Path
     content_path: Path
@@ -172,28 +181,39 @@ class RecordedWaCorpus:
             return resolved
         return None
 
-    def _load_sections(self, manifest_path: Path) -> tuple[RecordedSection, ...]:
+    def _load_sections(self, manifest_path: Path) -> _SectionsFile:
         """Load recorded section body-text records from the companion sections file.
 
-        Returns an empty tuple when no sections file exists, when the file is
+        Returns an empty result when no sections file exists, when the file is
         malformed, or when individual entries are missing required fields. No
-        exception is raised: missing section data is not a corpus error.
+        exception is raised: missing section data is not a corpus error, exactly
+        as ADR 0014 recorded.
+
+        The file's own `source_id` and `source_document_sha256` are carried out
+        alongside the records so that `sections.verify_section` can bind them to
+        the document they claim to describe. They are recorded data and are
+        never trusted here.
         """
 
         path = self._sections_path(manifest_path)
         if path is None:
-            return ()
+            return _SectionsFile()
         try:
             if path.stat().st_size > _MAX_MANIFEST_BYTES:
-                return ()
+                return _SectionsFile()
             parsed = json.loads(path.read_bytes())
         except (OSError, ValueError):
-            return ()
+            return _SectionsFile()
         if not isinstance(parsed, Mapping):
-            return ()
+            return _SectionsFile()
+        declared_source_id = _opt_str(parsed, "source_id")
+        declared_document_sha256 = _opt_str(parsed, "source_document_sha256")
         raw = parsed.get("sections")
         if not isinstance(raw, Sequence) or isinstance(raw, str | bytes):
-            return ()
+            return _SectionsFile(
+                source_id=declared_source_id,
+                source_document_sha256=declared_document_sha256,
+            )
         sections: list[RecordedSection] = []
         for entry in raw:
             if not isinstance(entry, Mapping):
@@ -212,10 +232,15 @@ class RecordedWaCorpus:
                     verified=entry.get("verified") is True,
                 )
             )
-        return tuple(sections)
+        return _SectionsFile(
+            sections=tuple(sections),
+            source_id=declared_source_id,
+            source_document_sha256=declared_document_sha256,
+        )
 
     def _read(self, entry: _ManifestEntry) -> RecordedWaSource:
         fields = entry.fields
+        companion = self._load_sections(entry.manifest_path)
         act = _opt_mapping(fields, "act")
         version = _opt_mapping(fields, "version")
         status = _opt_mapping(fields, "status")
@@ -242,5 +267,7 @@ class RecordedWaCorpus:
             retrieved_at=_opt_str(fields, "retrieved_at_utc"),
             sha256=_opt_str(fields, "sha256"),
             source_content=content,
-            sections=self._load_sections(entry.manifest_path),
+            sections=companion.sections,
+            sections_source_id=companion.source_id,
+            sections_source_document_sha256=companion.source_document_sha256,
         )

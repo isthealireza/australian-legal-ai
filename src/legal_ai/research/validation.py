@@ -102,19 +102,26 @@ def _legal_status(currency: str | None, in_force: bool | None) -> LegalStatus:
     return LegalStatus.UNKNOWN
 
 
-def _find_provision(
+def _find_provisions(
     source: RecordedWaSource, requested_identifier: str
-) -> RecordedProvision | None:
-    """Match a request against the exact recorded citation forms only."""
+) -> tuple[RecordedProvision, ...]:
+    """Return **every** recorded provision the request matches.
+
+    Deliberately not first-match. A request that resolves to more than one
+    recorded provision is ambiguous, and answering it by list order would let
+    the order of a manifest decide which law is cited.
+    """
 
     wanted = normalize_for_match(requested_identifier)
-    for provision in source.provisions:
-        if wanted in {
+    return tuple(
+        provision
+        for provision in source.provisions
+        if wanted
+        in {
             normalize_for_match(provision.identifier),
             normalize_for_match(provision.pinpoint),
-        }:
-            return provision
-    return None
+        }
+    )
 
 
 def validate_recorded_source(
@@ -193,9 +200,12 @@ def validate_recorded_source(
         return ResearchRefusalCode.HASH_MISMATCH
 
     # 4. Citation existence, then pinpoint integrity, against recorded forms only.
-    provision = _find_provision(source, query.provision_identifier)
-    if provision is None:
+    matches = _find_provisions(source, query.provision_identifier)
+    if not matches:
         return ResearchRefusalCode.CITATION_NOT_FOUND
+    if len(matches) > 1:
+        return ResearchRefusalCode.PROVISION_AMBIGUOUS
+    provision = matches[0]
     if normalize_for_match(query.pinpoint) != normalize_for_match(provision.pinpoint):
         return ResearchRefusalCode.PINPOINT_MISMATCH
 
