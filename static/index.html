@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Australian Legal AI Agent</title>
+<meta name="description" content="Grounded legal research over an indexed corpus of official Australian legislation.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b3d63'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='14' font-weight='700' fill='white' text-anchor='middle'%3EAU%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Situations</button>
+    <div class="brand">
+      <div class="mark" aria-hidden="true">AU</div>
+      <div>
+        <h1>Australian Legal AI Agent</h1>
+        <p class="sub">Grounded research over indexed Australian legislation</p>
+      </div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <span class="pill" id="service-pill"><span class="dot"></span><span id="service-text">Checking service…</span></span>
+  </header>
+
+  <div class="notice" role="note">
+    <span aria-hidden="true">⚖️</span>
+    <span><strong>Not legal advice.</strong> This prototype is not a lawyer. It answers only questions
+    supported by its currently indexed corpus, and refuses when the evidence is insufficient.</span>
+  </div>
+
+  <main class="layout">
+
+    <aside class="sidebar" id="sidebar">
+      <section class="panel">
+        <h2>Situations</h2>
+        <div class="body" id="corpus">
+          <p class="empty">Loading situations…</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Recent questions</h2>
+        <div class="body">
+          <ul class="history" id="history"></ul>
+          <p class="empty" id="history-empty">Nothing yet. Your questions will appear here.</p>
+          <p style="margin:10px 0 0"><button class="link-btn" id="clear-history" type="button" hidden>Clear history</button></p>
+        </div>
+      </section>
+    </aside>
+
+    <section>
+      <form class="panel composer" id="route-form">
+        <h2>Describe your problem</h2>
+        <div class="body">
+          <label class="field" for="problem">
+            <span class="lab">What happened, in your own words — the system picks the provision</span>
+            <textarea id="problem" name="problem" maxlength="4096"
+              placeholder="For example: I reversed into a parked car and drove off. What was I supposed to do?"></textarea>
+          </label>
+          <div class="actions">
+            <button class="btn" id="route-submit" type="submit">Find the provision</button>
+            <span class="hint" id="route-hint">Not sure which situation fits? Describe it and let the system choose. You can still pick one yourself below.</span>
+          </div>
+          <div id="route-result" aria-live="polite"></div>
+        </div>
+      </form>
+
+      <form class="panel composer" id="form">
+        <h2>Research a provision</h2>
+        <div class="body">
+          <label class="field" for="question">
+            <span class="lab">Your question</span>
+            <textarea id="question" name="question" maxlength="4096" required
+              placeholder="For example: What must a driver do after damaging property, and what penalty applies?"></textarea>
+          </label>
+
+          <div>
+            <span class="lab standalone">Choose the situation that best matches your question</span>
+            <div class="selected" id="selected" aria-live="polite">
+              <span class="none">No situation chosen yet.</span>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="submit" type="submit" disabled>Research</button>
+            <span class="hint" id="hint">Select a provision to begin.</span>
+          </div>
+        </div>
+      </form>
+
+      <section class="panel intro" id="intro">
+        <div class="body">
+          <h3>Choose a situation below, then ask your question in plain English.</h3>
+          <ol class="steps-intro">
+            <li><strong>Pick the situation</strong> that matches what happened — no legal knowledge needed.</li>
+            <li><strong>Ask in your own words</strong>, the way you would ask a colleague.</li>
+            <li><strong>Read the answer</strong>. Every sentence carries the exact law it comes from, so you can check it.</li>
+          </ol>
+          <p class="intro-note">If the law does not cover your question, you will get a clear refusal
+          rather than a guess.</p>
+        </div>
+      </section>
+
+      <section class="panel" id="result-panel" hidden>
+        <div id="result" aria-live="polite"></div>
+      </section>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Legislative content is sourced from official Australian legislation websites. Western Australian
+    material is reproduced under CC BY 4.0.</p>
+    <p>Every answer states the exact version and SHA-256 digest of the source it rests on.</p>
+  </footer>
+
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

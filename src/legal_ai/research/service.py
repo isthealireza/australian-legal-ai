@@ -100,6 +100,26 @@ class WaResearchService:
             return ResearchTerminated()
         return ResearchValidated(packet=outcome.to_packet())
 
+    def audit_refusal(self, query: ResearchQuery, code: ResearchRefusalCode) -> bool:
+        """Record a refusal decided before retrieval, without evaluating anything.
+
+        The scope gate refuses a request from its question text alone, before any
+        corpus retrieval or model call. That refusal is still audited exactly like
+        an evaluated one — same event shape, same fail-closed contract — so it
+        leaves the same trail as an out-of-corpus or jurisdiction refusal. Returns
+        True if the required audit event was recorded, False if the sink failed.
+        """
+
+        event = ResearchAuditEvent(
+            outcome=ResearchOutcome.REFUSED,
+            refusal_code=code,
+            requested_jurisdiction=query.jurisdiction,
+            requested_act_title=query.act_title,
+            requested_provision_identifier=query.provision_identifier,
+            requested_pinpoint=query.pinpoint,
+        )
+        return self._record(event)
+
     def _evaluate(self, query: ResearchQuery) -> PacketDraft | ResearchRefusalCode:
         """Deterministically resolve one query without emitting anything."""
 

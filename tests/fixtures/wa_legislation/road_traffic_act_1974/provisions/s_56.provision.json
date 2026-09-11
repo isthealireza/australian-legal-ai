@@ -1,0 +1,29 @@
+{
+  "act_title": "Road Traffic Act 1974",
+  "byte_length": 2769,
+  "derivation": {
+    "steps": [
+      "pypdf text extraction, page by page, in document order",
+      "removal of repeated page headers, footers, and running Part/Division titles",
+      "per-line whitespace trimming and removal of blank lines",
+      "provision boundary detection between one section heading and the next",
+      "reflow of layout-wrapped lines into one line per structural unit"
+    ],
+    "tool": "scripts/derive_wa_provisions.py"
+  },
+  "derived_at_utc": "2026-09-02T06:45:59Z",
+  "file": "s_56.txt",
+  "heading": "Driver in incident occasioning bodily harm or property damage to report incident to police",
+  "jurisdiction": "WA",
+  "notes": [
+    "Derived text, not official bytes. The official source is the parent PDF.",
+    "Quotes are validated against this file's recorded digest."
+  ],
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a703.html&view=consolidated",
+  "parent_sha256": "61dbca2d8eddc33a3ebc759b8759886192efaa8b09440089541efd35ed19c525",
+  "parent_source_id": "wa_legislation:road_traffic_act_1974:consolidated:14-t0-00",
+  "pinpoint": "section 56",
+  "provision_identifier": "s 56",
+  "sha256": "3728b156e45402db65ffd69e2dd2b2f7d15f4bd41d8c3968d180fcdc687521da",
+  "source_version": "14-t0-00"
+}

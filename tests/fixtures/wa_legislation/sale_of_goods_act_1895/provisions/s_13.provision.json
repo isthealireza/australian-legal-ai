@@ -1,0 +1,29 @@
+{
+  "act_title": "Sale of Goods Act 1895",
+  "byte_length": 443,
+  "derivation": {
+    "steps": [
+      "pypdf text extraction, page by page, in document order",
+      "removal of repeated page headers, footers, and running Part/Division titles",
+      "per-line whitespace trimming and removal of blank lines",
+      "provision boundary detection between one section heading and the next",
+      "reflow of layout-wrapped lines into one line per structural unit"
+    ],
+    "tool": "scripts/derive_wa_provisions.py"
+  },
+  "derived_at_utc": "2026-09-08T02:20:23Z",
+  "file": "s_13.txt",
+  "heading": "Sale by description",
+  "jurisdiction": "WA",
+  "notes": [
+    "Derived text, not official bytes. The official source is the parent PDF.",
+    "Quotes are validated against this file's recorded digest."
+  ],
+  "official_source_url": "https://www.legislation.wa.gov.au/legislation/statutes.nsf/law_a726.html&view=consolidated",
+  "parent_sha256": "5e3a298c37d2d32aaad9a2eaaa61c44164b9144875316bf080b649a1b50081e1",
+  "parent_source_id": "wa_legislation:sale_of_goods_act_1895:consolidated:05-d0-06",
+  "pinpoint": "section 13",
+  "provision_identifier": "s 13",
+  "sha256": "48b94fddef29f68967d0aa8b3587ca5de7cccb0e65d6412147e62058653e759e",
+  "source_version": "05-d0-06"
+}

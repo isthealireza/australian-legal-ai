@@ -49,6 +49,12 @@ class ResearchRefusalCode(StrEnum):
     SECTION_NOT_VERIFIED = "SECTION_NOT_VERIFIED"
     SECTION_TEXT_HASH_MISMATCH = "SECTION_TEXT_HASH_MISMATCH"
 
+    #: The request asked for something outside the research boundary (contract or
+    #: document review, or document drafting; MVP_ROADMAP section 11). Decided
+    #: from the question text before any retrieval or model call, and audited
+    #: like any other refusal.
+    REQUEST_OUT_OF_SCOPE = "REQUEST_OUT_OF_SCOPE"
+
 
 class ResearchTerminalCode(StrEnum):
     """Terminal failure codes. These are never ordinary refusals."""
