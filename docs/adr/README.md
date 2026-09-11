@@ -16,3 +16,4 @@ Phase 4 accepts: [0013 Phase 4 Research and Evidence Packets](0013-phase-4-resea
 Orchestration foundation proposes: [0016 Agent orchestration foundation](0016-agent-orchestration-foundation.md).
 Corpus expansion proposes: [0017 WA corpus expansion invariants, phases and gates](0017-wa-corpus-expansion-invariants.md).
 E0-A proposes: [0018 E0-A deterministic corpus-safety gates](0018-e0a-deterministic-corpus-safety-gates.md).
+E2 proposes: [0019 E2 WA staging and promotion pipeline](0019-e2-wa-staging-pipeline.md).
