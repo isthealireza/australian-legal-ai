@@ -15,7 +15,7 @@ Two properties are load-bearing:
   approval record (gate G1) bound to the exact URL, version, currency date and
   retrieval timestamp.
 
-See `docs/adr/0019-e2-wa-staging-pipeline.md`.
+See `docs/adr/0021-e2-wa-staging-pipeline.md`.
 """
 
 from scripts.wa_ingest.extraction import (

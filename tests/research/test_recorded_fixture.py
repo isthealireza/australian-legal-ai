@@ -161,7 +161,7 @@ def test_pinpoint_mismatch_against_the_recorded_provision_refuses() -> None:
 
 def test_out_of_corpus_act_refuses() -> None:
     result = _service(InMemoryResearchAuditSink()).research(
-        recorded_query(act_title="Sale of Goods Act 1895")
+        recorded_query(act_title="Road Transport Act 2013")
     )
 
     assert isinstance(result, ResearchRefused)

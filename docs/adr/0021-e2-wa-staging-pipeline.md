@@ -1,4 +1,4 @@
-# ADR 0019: E2 — The WA Staging and Promotion Pipeline
+# ADR 0021: E2 — The WA Staging and Promotion Pipeline
 
 - Status: Proposed
 - Date: 2026-09-10
@@ -6,6 +6,8 @@
 - Builds on: [ADR 0013](0013-phase-4-research-evidence-packets.md), [ADR 0014](0014-phase-4-slice-2-section-text-records.md), [ADR 0017](0017-wa-corpus-expansion-invariants.md), [ADR 0018](0018-e0a-deterministic-corpus-safety-gates.md)
 - Implements: phase **E2** from ADR 0017 §4
 - Base: `feat/e0a-corpus-safety-gates`, itself stacked on the E1 golden harness.
+- Numbering: originally drafted as 0019. `main` has since merged its own ADRs
+  0019 and 0020 for the Phase 5 answering line, so this record is 0021.
 
 ## Context
 

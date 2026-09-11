@@ -1,0 +1,10 @@
+# Gitleaks allowlist — known-safe historic findings in test fixtures.
+#
+# Both entries are synthetic secret-shaped strings assembled in
+# tests/review/test_deepseek_review.py for the DeepSeek review-gate test suite.
+# They are not real credentials. The test was later reworked (commit a3eed97) to
+# assemble the strings at runtime so they do not appear in source, but the
+# original commits remain in history and are caught by the history scan.
+
+84e4ddcd45a9b31897199d4b35d51716be2bc7c1:tests/review/test_deepseek_review.py:private-key:479
+cb99d9e3c6caf9c03cf6cb9c09d707cc5780d5ab:tests/review/test_deepseek_review.py:private-key:477

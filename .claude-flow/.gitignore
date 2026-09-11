@@ -1,0 +1,11 @@
+# Claude Flow runtime files
+data/
+logs/
+sessions/
+neural/
+*.log
+*.tmp
+
+# Machine-local resolver state and mutable metrics
+memory-package.json
+metrics/
